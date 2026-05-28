@@ -24,6 +24,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Correção de problemas de cache do script `admin-painel.js` no navegador adicionando atualização de versão (cache buster) no HTML.
   - Aprimoramento da colagem com `window.focus()` e tratamento customizado de erros de clipboard vazio para evitar falsas exceções de permissão.
   - Implementação de compressão automática de imagens (JPEG 80%, max 1200px) no frontend, otimizando o envio e corrigindo erros de payload no processamento OCR.
+  - Correção do erro HTTP 401 Unauthorized adicionando explicitamente os cabeçalhos de autorização anon nas chamadas da Edge Function do Supabase.
+
 
 
 

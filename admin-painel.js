@@ -1006,6 +1006,9 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
 
     // Chamar a Edge Function segura do Supabase (A chave fica escondida lá)
     const { data: data, error: fnError } = await supabaseClient.functions.invoke('ocr-gemini', {
+      headers: {
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      },
       body: {
         contents: [{
           parts: [
