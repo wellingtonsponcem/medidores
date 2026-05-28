@@ -1117,19 +1117,67 @@ document.addEventListener('DOMContentLoaded', initAdmin);
 // =================== CLIPBOARD / PASTE SUPPORT ===================
 let activePasteCard = null;
 
+async function colarDoClipboard(card) {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert("Seu navegador não suporta colar diretamente via botão ou requer conexão segura (HTTPS). Por favor, clique no card e aperte Ctrl+V no teclado.");
+      return false;
+    }
+    const clipboardItems = await navigator.clipboard.read();
+    for (const item of clipboardItems) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const input = card.querySelector('input[type="file"]');
+          
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(blob);
+          input.files = dataTransfer.files;
+          
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          console.log(`Imagem colada via Clipboard API no card ${card.id}`);
+          
+          // Remove destaque do card ativo
+          card.classList.remove('active-drop');
+          if (activePasteCard === card) activePasteCard = null;
+          return true;
+        }
+      }
+    }
+    alert("Nenhuma imagem encontrada na área de transferência. Copie uma imagem primeiro!");
+  } catch (err) {
+    console.error("Erro ao ler clipboard:", err);
+    alert("Não foi possível acessar a área de transferência. Certifique-se de autorizar a permissão de leitura de área de transferência para o site, ou simplesmente use o atalho Ctrl+V no teclado após selecionar o card.");
+  }
+  return false;
+}
+
 function setupClipboard() {
-  // Quando clica no card, marca ele como destino do colar
   document.querySelectorAll('.upload-card').forEach(card => {
+    // Escuta o clique no card geral
     card.addEventListener('click', (e) => {
       // Remove destaque de todos e coloca no atual
       document.querySelectorAll('.upload-card').forEach(c => c.classList.remove('active-drop'));
       card.classList.add('active-drop');
       activePasteCard = card;
-      console.log("Card pronto para receber Ctrl+V:", card.id);
+      
+      // Se o clique foi no botão de colar (btn-paste), colamos diretamente do clipboard
+      if (e.target.closest('.btn-paste')) {
+        e.preventDefault();
+        e.stopPropagation();
+        colarDoClipboard(card);
+        return;
+      }
+      
+      // Se o clique foi no botão de upload (btn-upload) ou na área geral (sem ser os botões de ação)
+      if (e.target.closest('.btn-upload') || !e.target.closest('button')) {
+        // Disparar o input de arquivo
+        card.querySelector('input[type="file"]').click();
+      }
     });
   });
 
-  // Escuta o evento de colar (Ctrl+V)
+  // Escuta o evento global de colar (Ctrl+V) para qualquer card que esteja focado (active-drop)
   document.addEventListener('paste', async (e) => {
     if (!activePasteCard) {
       console.warn("Nenhum card selecionado para colar a imagem.");

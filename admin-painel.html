@@ -21,7 +21,7 @@
     .upload-card span { font-size: 0.7rem; font-weight: 700; color: #475569; display: block; }
     .upload-card.has-file { border-color: #10b981; background: #ecfdf5; }
     .upload-card.active-drop { border-color: #6366f1; background: #eef2ff; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
-    .upload-card input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .upload-card input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
 
     /* Table */
     .table-container { overflow-x: auto; max-width: 100%; }
@@ -301,19 +301,61 @@
          </div>
          <p class="text-xs text-indigo-700/70 mb-4 font-medium">Selecione as fotos para a IA ler <b>(os 3 últimos números do Hidrômetro serão desconsiderados)</b>.</p>
 
-         <!-- Campos Água -->
-         <div id="ai-upload-agua" class="grid grid-cols-4 gap-3 hidden">
-             <div class="upload-card" id="card-ag-fat"><span>📄<br>Fatura</span><input type="file" id="up-ag-fatura" accept="image/*" onchange="tagFile('card-ag-fat')"></div>
-             <div class="upload-card" id="card-ag-h1"><span>💧<br>Hidro 1</span><input type="file" id="up-ag-h1" accept="image/*" onchange="tagFile('card-ag-h1')"></div>
-             <div class="upload-card" id="card-ag-h2"><span>💧<br>Hidro 2</span><input type="file" id="up-ag-h2" accept="image/*" onchange="tagFile('card-ag-h2')"></div>
-             <div class="upload-card" id="card-ag-h3"><span>💧<br>Hidro 3</span><input type="file" id="up-ag-h3" accept="image/*" onchange="tagFile('card-ag-h3')"></div>
-         </div>
-
-         <!-- Campos Energia -->
-         <div id="ai-upload-energia" class="grid grid-cols-2 gap-4 hidden">
-              <div class="upload-card" id="card-en-fat"><span>📄 Fatura Energia</span><input type="file" id="up-en-fatura" accept="image/*" onchange="tagFile('card-en-fat')"></div>
-              <div class="upload-card" id="card-en-int"><span>⚡ Relógio Interno</span><input type="file" id="up-en-interno" accept="image/*" onchange="tagFile('card-en-int')"></div>
-         </div>
+          <!-- Campos Água -->
+          <div id="ai-upload-agua" class="grid grid-cols-4 gap-3 hidden">
+              <div class="upload-card" id="card-ag-fat">
+                <span>📄<br>Fatura</span>
+                <input type="file" id="up-ag-fatura" accept="image/*" onchange="tagFile('card-ag-fat')">
+                <div class="flex items-center justify-center gap-1 mt-2 relative z-10">
+                  <button type="button" class="btn-upload px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold rounded border border-slate-200 transition">Upload</button>
+                  <button type="button" class="btn-paste px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded border border-indigo-200 transition">Colar</button>
+                </div>
+              </div>
+              <div class="upload-card" id="card-ag-h1">
+                <span>💧<br>Hidro 1</span>
+                <input type="file" id="up-ag-h1" accept="image/*" onchange="tagFile('card-ag-h1')">
+                <div class="flex items-center justify-center gap-1 mt-2 relative z-10">
+                  <button type="button" class="btn-upload px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold rounded border border-slate-200 transition">Upload</button>
+                  <button type="button" class="btn-paste px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded border border-indigo-200 transition">Colar</button>
+                </div>
+              </div>
+              <div class="upload-card" id="card-ag-h2">
+                <span>💧<br>Hidro 2</span>
+                <input type="file" id="up-ag-h2" accept="image/*" onchange="tagFile('card-ag-h2')">
+                <div class="flex items-center justify-center gap-1 mt-2 relative z-10">
+                  <button type="button" class="btn-upload px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold rounded border border-slate-200 transition">Upload</button>
+                  <button type="button" class="btn-paste px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded border border-indigo-200 transition">Colar</button>
+                </div>
+              </div>
+              <div class="upload-card" id="card-ag-h3">
+                <span>💧<br>Hidro 3</span>
+                <input type="file" id="up-ag-h3" accept="image/*" onchange="tagFile('card-ag-h3')">
+                <div class="flex items-center justify-center gap-1 mt-2 relative z-10">
+                  <button type="button" class="btn-upload px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold rounded border border-slate-200 transition">Upload</button>
+                  <button type="button" class="btn-paste px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded border border-indigo-200 transition">Colar</button>
+                </div>
+              </div>
+          </div>
+ 
+          <!-- Campos Energia -->
+          <div id="ai-upload-energia" class="grid grid-cols-2 gap-4 hidden">
+               <div class="upload-card" id="card-en-fat">
+                 <span>📄 Fatura Energia</span>
+                 <input type="file" id="up-en-fatura" accept="image/*" onchange="tagFile('card-en-fat')">
+                 <div class="flex items-center justify-center gap-2 mt-2 relative z-10">
+                   <button type="button" class="btn-upload px-2.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded border border-slate-200 transition">Upload de Arquivo</button>
+                   <button type="button" class="btn-paste px-2.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded border border-indigo-200 transition">Colar do Clipboard</button>
+                 </div>
+               </div>
+               <div class="upload-card" id="card-en-int">
+                 <span>⚡ Relógio Interno</span>
+                 <input type="file" id="up-en-interno" accept="image/*" onchange="tagFile('card-en-int')">
+                 <div class="flex items-center justify-center gap-2 mt-2 relative z-10">
+                   <button type="button" class="btn-upload px-2.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded border border-slate-200 transition">Upload de Arquivo</button>
+                   <button type="button" class="btn-paste px-2.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded border border-indigo-200 transition">Colar do Clipboard</button>
+                 </div>
+               </div>
+          </div>
 
          <button type="button" id="btn-ai-process" onclick="processarImagens()" class="mt-4 w-full py-3 border border-indigo-200 bg-white text-indigo-700 rounded-lg text-xs font-bold uppercase transition hover:bg-indigo-50 shadow-sm flex justify-center items-center">
             📸 Auto-Preencher com IA

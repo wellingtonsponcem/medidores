@@ -20,5 +20,7 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Criação do arquivo de histórico inicial `HISTORICO.md`.
   - Conclusão do primeiro commit e do envio (`git push`) para a branch remota `main`.
   - Planejamento e definição dos passos para sincronização via SSH/Deploy do repositório no servidor de produção.
+  - Implementação de botões de Upload e Colar nos cards de leitura inteligente (Água e Energia), permitindo colar imagens diretamente do clipboard (Clipboard API) ou via atalho Ctrl+V.
+
 
 
