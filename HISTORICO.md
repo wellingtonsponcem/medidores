@@ -22,6 +22,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Planejamento e definição dos passos para sincronização via SSH/Deploy do repositório no servidor de produção.
   - Implementação de botões de Upload e Colar nos cards de leitura inteligente (Água e Energia), permitindo colar imagens diretamente do clipboard (Clipboard API) ou via atalho Ctrl+V.
   - Correção de problemas de cache do script `admin-painel.js` no navegador adicionando atualização de versão (cache buster) no HTML.
+  - Aprimoramento da colagem com `window.focus()` e tratamento customizado de erros de clipboard vazio para evitar falsas exceções de permissão.
+
 
 
 

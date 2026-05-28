@@ -1118,12 +1118,17 @@ document.addEventListener('DOMContentLoaded', initAdmin);
 let activePasteCard = null;
 
 async function colarDoClipboard(card) {
+  // Garante o foco na janela para evitar a excecao "Document is not focused" do Chrome
+  window.focus();
+  
   try {
     if (!navigator.clipboard || !navigator.clipboard.read) {
       alert("Seu navegador não suporta colar diretamente via botão ou requer conexão segura (HTTPS). Por favor, clique no card e aperte Ctrl+V no teclado.");
       return false;
     }
     const clipboardItems = await navigator.clipboard.read();
+    let imagemEncontrada = false;
+    
     for (const item of clipboardItems) {
       for (const type of item.types) {
         if (type.startsWith('image/')) {
@@ -1140,14 +1145,26 @@ async function colarDoClipboard(card) {
           // Remove destaque do card ativo
           card.classList.remove('active-drop');
           if (activePasteCard === card) activePasteCard = null;
+          imagemEncontrada = true;
           return true;
         }
       }
     }
-    alert("Nenhuma imagem encontrada na área de transferência. Copie uma imagem primeiro!");
+    
+    if (!imagemEncontrada) {
+      alert("Nenhuma imagem encontrada na área de transferência! Por favor, tire um print ou copie uma imagem (não texto) antes de clicar em colar.");
+    }
   } catch (err) {
-    console.error("Erro ao ler clipboard:", err);
-    alert("Não foi possível acessar a área de transferência. Certifique-se de autorizar a permissão de leitura de área de transferência para o site, ou simplesmente use o atalho Ctrl+V no teclado após selecionar o card.");
+    console.error("Erro detalhado ao acessar o clipboard:", err);
+    
+    const msgErro = err.message || "";
+    if (msgErro.includes("empty") || msgErro.includes("no supported data") || msgErro.includes("Clipboard is empty")) {
+      alert("Sua área de transferência está vazia ou não contém uma imagem. Por favor, tire um print (Print Screen) ou copie uma imagem antes de colar!");
+    } else if (msgErro.includes("NotAllowedError") || msgErro.includes("permission") || msgErro.includes("denied")) {
+      alert("Permissão negada ou bloqueada pelo navegador. Você pode simplesmente clicar no card (ele ficará com borda azul) e apertar Ctrl+V no seu teclado para colar!");
+    } else {
+      alert("Não foi possível acessar a área de transferência automaticamente neste navegador. Mas não se preocupe! Você pode colar usando o atalho de teclado: selecione o card e aperte Ctrl+V.");
+    }
   }
   return false;
 }
