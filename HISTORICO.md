@@ -21,6 +21,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Conclusão do primeiro commit e do envio (`git push`) para a branch remota `main`.
   - Planejamento e definição dos passos para sincronização via SSH/Deploy do repositório no servidor de produção.
   - Implementação de botões de Upload e Colar nos cards de leitura inteligente (Água e Energia), permitindo colar imagens diretamente do clipboard (Clipboard API) ou via atalho Ctrl+V.
+  - Correção de problemas de cache do script `admin-painel.js` no navegador adicionando atualização de versão (cache buster) no HTML.
+
 
 
 
