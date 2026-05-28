@@ -842,6 +842,41 @@ window.tagFile = function(cardId) {
   document.getElementById(cardId).classList.add('has-file');
 }
 
+// Compress Image helper (redimensiona para max 1200px e comprime com 80% qualidade JPEG)
+const compressImage = (file, maxWidth = 1200, quality = 0.8) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(img.src);
+    const canvas = document.createElement('canvas');
+    let width = img.width;
+    let height = img.height;
+
+    if (width > maxWidth) {
+      height = (maxWidth / width) * height;
+      width = maxWidth;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const compressedFile = new File([blob], file.name || "compressed.jpg", {
+          type: "image/jpeg",
+          lastModified: Date.now()
+        });
+        resolve(compressedFile);
+      } else {
+        reject(new Error("Falha ao gerar o blob comprimido"));
+      }
+    }, "image/jpeg", quality);
+  };
+  img.onerror = (err) => reject(err);
+});
+
 // Convert File helper
 const fileToBase64 = (file) => new Promise((resolve) => {
   const reader = new FileReader();
@@ -890,10 +925,26 @@ Você receberá as imagens na seguinte ordem exata:`;
       const f4 = document.getElementById('up-ag-h3').files[0];
       
       let imgCount = 1;
-      if(f1) { inlineDataArr.push(await fileToBase64(f1)); prompt_text += `\n- Imagem ${imgCount++}: Fatura`; }
-      if(f2) { inlineDataArr.push(await fileToBase64(f2)); prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h1"`; }
-      if(f3) { inlineDataArr.push(await fileToBase64(f3)); prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h2"`; }
-      if(f4) { inlineDataArr.push(await fileToBase64(f4)); prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h3"`; }
+      if(f1) { 
+        const comp = await compressImage(f1).catch(e => f1);
+        inlineDataArr.push(await fileToBase64(comp)); 
+        prompt_text += `\n- Imagem ${imgCount++}: Fatura`; 
+      }
+      if(f2) { 
+        const comp = await compressImage(f2).catch(e => f2);
+        inlineDataArr.push(await fileToBase64(comp)); 
+        prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h1"`; 
+      }
+      if(f3) { 
+        const comp = await compressImage(f3).catch(e => f3);
+        inlineDataArr.push(await fileToBase64(comp)); 
+        prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h2"`; 
+      }
+      if(f4) { 
+        const comp = await compressImage(f4).catch(e => f4);
+        inlineDataArr.push(await fileToBase64(comp)); 
+        prompt_text += `\n- Imagem ${imgCount++}: Hidrômetro com identificador "h3"`; 
+      }
       
       prompt_text += `
 
@@ -927,7 +978,8 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
       const f2 = document.getElementById('up-en-interno').files[0];
       
       if(f1) {
-        inlineDataArr.push(await fileToBase64(f1));
+        const comp = await compressImage(f1).catch(e => f1);
+        inlineDataArr.push(await fileToBase64(comp));
         prompt_text += cfg.key === 'av_brasil'
           ? `IMAGEM ${currentImageIndex} [Fatura EDP]: Extraia 'faturaTotal' (valor total a pagar). Extraia APENAS o campo "Cons. Consumo kWh" ou o total de consumo em kWh destacado no quadro do medidor e salve em 'leituraPadrao'.\n`
           : `IMAGEM ${currentImageIndex} [Fatura EDP]: Extraia 'faturaTotal' (o Valor a Pagar float, ex: 200.50). Extraia a Leitura do Mês faturada ou Consumo ativo (número) e salve em 'leituraPadrao'.\n`;
@@ -936,7 +988,8 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
         currentImageIndex++;
       }
       if(f2) {
-        inlineDataArr.push(await fileToBase64(f2));
+        const comp = await compressImage(f2).catch(e => f2);
+        inlineDataArr.push(await fileToBase64(comp));
         prompt_text += cfg.key === 'av_brasil'
           ? `IMAGEM ${currentImageIndex} [Whatímetro Interno]: Extraia o valor "Total Ele" exibido no aplicativo e salve em 'leituraInterno'.\n`
           : `IMAGEM ${currentImageIndex} [Relógio Interno]: Extraia o número total da leitura exibida no display. Salve em 'leituraInterno'.\n`;
