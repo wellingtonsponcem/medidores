@@ -18,3 +18,5 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Criação do arquivo `README.md`.
   - Configuração do repositório remoto para `https://github.com/wellingtonsponcem/medidores.git`.
   - Criação do arquivo de histórico inicial `HISTORICO.md`.
+  - Conclusão do primeiro commit e do envio (`git push`) para a branch remota `main`.
+
