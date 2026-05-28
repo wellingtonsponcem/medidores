@@ -1,0 +1,305 @@
+<!DOCTYPE html><html lang="pt-br" data-lt-installed="true"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-dim": "#d8dadc",
+                    "tertiary-fixed-dim": "#bbc8d0",
+                    "surface-variant": "#e0e3e5",
+                    "on-secondary-container": "#5e2c00",
+                    "on-secondary-fixed": "#311300",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-surface-variant": "#414752",
+                    "error": "#ba1a1a",
+                    "secondary": "#964900",
+                    "surface-container": "#eceef0",
+                    "secondary-fixed-dim": "#ffb786",
+                    "background": "#f7f9fb",
+                    "on-background": "#191c1e",
+                    "surface": "#f7f9fb",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#c1c6d4",
+                    "primary-fixed": "#d4e3ff",
+                    "surface-container-high": "#e6e8ea",
+                    "outline": "#717783",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "tertiary-container": "#6b777e",
+                    "primary": "#005dac",
+                    "secondary-container": "#fc820c",
+                    "tertiary-fixed": "#d7e4ec",
+                    "on-secondary-fixed-variant": "#723600",
+                    "primary-fixed-dim": "#a5c8ff",
+                    "on-error-container": "#93000a",
+                    "surface-tint": "#005faf",
+                    "on-tertiary-container": "#fdfdff",
+                    "surface-container-highest": "#e0e3e5",
+                    "tertiary": "#525e65",
+                    "inverse-primary": "#a5c8ff",
+                    "surface-container-low": "#f2f4f6",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-surface": "#191c1e",
+                    "secondary-fixed": "#ffdcc6",
+                    "on-primary-container": "#fffdff",
+                    "on-tertiary-fixed": "#111d23",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-fixed-variant": "#004786",
+                    "on-primary-fixed": "#001c3a",
+                    "inverse-surface": "#2d3133",
+                    "surface-bright": "#f7f9fb",
+                    "on-tertiary-fixed-variant": "#3c494f",
+                    "primary-container": "#1976d2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background font-body text-on-background antialiased pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm dark:shadow-none flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden">
+<img alt="user profile picture" class="w-full h-full object-cover" data-alt="Close up portrait of a professional man in a bright office setting with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-GFONwHq5dD0T06nqtflgE0KS3oH75xzdWsruYCbbYcBfENmbxhmeNSvmRpxe_ylF6ZSsV3kczCRukExgqER8hcY4OpRLDrbh7ziO1YD0Jv52Tjp-Yo2WAgc6s1Dt_RR7HFxtGhv1Eo_knd7ED-iRpz9mQHga3WT0rSk37ZT19mBTQBvLIVL5KAxDnSW8NOLG8rwgkoUkK2GC3B1sRvcCQ8VnoxE_MzOaWm4iuInw-p6lBrWulVGyCyTc-GFXIUPo1LWxypUGQ1-s" style="">
+</div>
+<span class="text-xl font-extrabold tracking-tight text-blue-700 dark:text-blue-400 font-headline" style="">D-Meter</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="transition-all duration-300 active:scale-95 text-blue-700 dark:text-blue-400" style="">
+<span class="material-symbols-outlined" style="">calendar_today</span>
+</button>
+</div>
+</header>
+<main class="mt-20 px-4 space-y-6">
+<!-- Hero Branding Section -->
+<section class="mt-8">
+<div class="flex flex-col">
+<h1 class="font-headline font-extrabold text-3xl text-on-background tracking-tight" style="">Performance Água</h1>
+<p class="text-tertiary font-medium text-sm" style="">Dashboard de Gestão de Recursos</p>
+</div>
+</section>
+<!-- Summary Cards: Horizontal Scroll for Mobile Asymmetry -->
+<section class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
+<!-- Card 1: Última Fatura -->
+<div class="min-w-[200px] flex-shrink-0 bg-surface-container-lowest p-5 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/10">
+<span class="text-tertiary font-label text-[10px] uppercase tracking-widest font-semibold" style="">Última Fatura</span>
+<div class="mt-1 flex items-baseline gap-1">
+<span class="text-primary font-headline font-extrabold text-2xl" style="">R$ 142,50</span>
+</div>
+<div class="mt-2 flex items-center gap-1 text-error text-[11px] font-bold">
+<span class="material-symbols-outlined text-[14px]" style="">trending_up</span>
+<span class="" style="">+4.2%</span>
+</div>
+</div>
+<!-- Card 2: Gasto Médio -->
+<div class="min-w-[200px] flex-shrink-0 bg-surface-container-lowest p-5 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/10">
+<span class="text-tertiary font-label text-[10px] uppercase tracking-widest font-semibold" style="">Gasto Médio</span>
+<div class="mt-1 flex items-baseline gap-1">
+<span class="text-on-surface font-headline font-extrabold text-2xl" style="">R$ 128,10</span>
+</div>
+<div class="mt-2 flex items-center gap-1 text-primary text-[11px] font-bold">
+<span class="material-symbols-outlined text-[14px]" style="">trending_down</span>
+<span class="" style="">Estável</span>
+</div>
+</div>
+<!-- Card 3: Tarifa -->
+<div class="min-w-[200px] flex-shrink-0 bg-surface-container-lowest p-5 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/10">
+<span class="text-tertiary font-label text-[10px] uppercase tracking-widest font-semibold" style="">Tarifa Atual</span>
+<div class="mt-1 flex items-baseline gap-1">
+<span class="text-secondary font-headline font-extrabold text-2xl" style="">R$ 6,24/m³</span>
+</div>
+<div class="mt-2 flex items-center gap-1 text-tertiary text-[11px] font-bold uppercase">
+<span class="" style="">Residencial B</span>
+</div>
+</div>
+</section>
+<!-- Chart Section: Evolução do Consumo (6 Meses) -->
+<section class="bg-surface-container-lowest p-6 rounded-full shadow-[0_4px_40px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline font-bold text-lg text-on-surface" style="">Evolução do Consumo</h2>
+<span class="text-[10px] font-semibold text-tertiary bg-surface-container px-2 py-1 rounded-lg uppercase" style="">6 Meses</span>
+</div>
+<div class="h-48 w-full relative flex items-end justify-between gap-2 px-2">
+<!-- Bar 1 -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-fixed rounded-t-lg relative group h-[40%] transition-all hover:bg-primary">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100" style="">12m³</div>
+</div>
+<span class="text-[10px] font-bold text-tertiary" style="">JAN</span>
+</div>
+<!-- Bar 2 -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-fixed rounded-t-lg relative group h-[55%] transition-all hover:bg-primary">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100" style="">15m³</div>
+</div>
+<span class="text-[10px] font-bold text-tertiary" style="">FEV</span>
+</div>
+<!-- Bar 3 -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-fixed rounded-t-lg relative group h-[48%] transition-all hover:bg-primary">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100" style="">14m³</div>
+</div>
+<span class="text-[10px] font-bold text-tertiary" style="">MAR</span>
+</div>
+<!-- Bar 4 (Active/Current) -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-container rounded-t-lg relative h-[85%]">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary" style="">22m³</div>
+</div>
+<span class="text-[10px] font-extrabold text-primary" style="">ABR</span>
+</div>
+<!-- Bar 5 -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-fixed rounded-t-lg relative group h-[62%] transition-all hover:bg-primary">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100" style="">18m³</div>
+</div>
+<span class="text-[10px] font-bold text-tertiary" style="">MAI</span>
+</div>
+<!-- Bar 6 -->
+<div class="flex flex-col items-center gap-2 flex-1">
+<div class="w-full bg-primary-fixed rounded-t-lg relative group h-[50%] transition-all hover:bg-primary">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100" style="">16m³</div>
+</div>
+<span class="text-[10px] font-bold text-tertiary" style="">JUN</span>
+</div>
+</div>
+<div class="mt-6 p-4 bg-secondary-container/10 rounded-xl flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: &quot;FILL&quot; 1;">warning</span>
+<p class="text-xs font-medium text-on-secondary-container" style="">Consumo em Abril está 35% acima da sua média habitual.</p>
+</div>
+</section>
+<!-- Bento Grid: Logs and History Details -->
+<section class="space-y-6">
+<!-- Logs Recentes -->
+<div>
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline font-bold text-lg text-on-surface" style="">Logs Recentes</h2>
+<button class="text-primary font-bold text-xs" style="">Ver todos</button>
+</div>
+<div class="space-y-3">
+<!-- Log Item 1 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">water_drop</span>
+</div>
+<div>
+<h4 class="text-sm font-bold" style="">Leitura Concluída</h4>
+<p class="text-[10px] text-tertiary font-medium" style="">Hoje às 08:45</p>
+</div>
+</div>
+<span class="text-sm font-headline font-extrabold text-on-surface" style="">14.2 m³</span>
+</div>
+<!-- Log Item 2 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary-container/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">notification_important</span>
+</div>
+<div>
+<h4 class="text-sm font-bold" style="">Pico Detectado</h4>
+<p class="text-[10px] text-tertiary font-medium" style="">Ontem às 21:15</p>
+</div>
+</div>
+<span class="text-sm font-headline font-extrabold text-secondary" style="">Atenção</span>
+</div>
+</div>
+</div>
+<!-- Histórico Detalhado: Responsive List Version -->
+<div>
+<h2 class="font-headline font-bold text-lg text-on-surface mb-4" style="">Histórico Detalhado</h2>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/10">
+<div class="divide-y divide-surface-container">
+<!-- History Row 1 -->
+<div class="p-4 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface" style="">Maio/2024</span>
+<span class="text-[10px] text-tertiary" style="">Venc: 15/05</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-sm font-headline font-extrabold text-primary" style="">R$ 138,40</span>
+<span class="text-[10px] text-tertiary uppercase font-bold" style="">Pago</span>
+</div>
+</div>
+<!-- History Row 2 -->
+<div class="p-4 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface" style="">Abril/2024</span>
+<span class="text-[10px] text-tertiary" style="">Venc: 15/04</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-sm font-headline font-extrabold text-primary" style="">R$ 142,50</span>
+<span class="text-[10px] text-tertiary uppercase font-bold" style="">Pago</span>
+</div>
+</div>
+<!-- History Row 3 -->
+<div class="p-4 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface" style="">Março/2024</span>
+<span class="text-[10px] text-tertiary" style="">Venc: 15/03</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-sm font-headline font-extrabold text-primary" style="">R$ 126,10</span>
+<span class="text-[10px] text-tertiary uppercase font-bold" style="">Pago</span>
+</div>
+</div>
+</div>
+<div class="p-4 bg-surface-container-low text-center">
+<button class="text-xs font-bold text-primary-container uppercase tracking-widest" style="">Baixar PDF de Todas</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-100 dark:border-slate-800 flex justify-around items-center px-4 pb-6 pt-3 rounded-t-3xl">
+<a class="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-2xl px-5 py-2 transition-transform duration-200 active:scale-90" href="#" style="">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">water_drop</span>
+<span class="font-inter text-[11px] font-semibold uppercase tracking-wider mt-1" style="">ÁGUA</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-blue-600 dark:hover:text-blue-300 transition-transform duration-200 active:scale-90" href="#" style="">
+<span class="material-symbols-outlined" style="">bolt</span>
+<span class="font-inter text-[11px] font-semibold uppercase tracking-wider mt-1" style="">ENERGIA</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-blue-600 dark:hover:text-blue-300 transition-transform duration-200 active:scale-90" href="#" style="">
+<span class="material-symbols-outlined" style="">list_alt</span>
+<span class="font-inter text-[11px] font-semibold uppercase tracking-wider mt-1" style="">Logs</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-blue-600 dark:hover:text-blue-300 transition-transform duration-200 active:scale-90" href="#" style="">
+<span class="material-symbols-outlined" style="">history</span>
+<span class="font-inter text-[11px] font-semibold uppercase tracking-wider mt-1" style="">History</span>
+</a>
+</nav>
+</body></html>

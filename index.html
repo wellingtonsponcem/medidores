@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — D-Meter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; }
+    
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .form-input {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+      color: #f8fafc;
+      transition: all 0.2s;
+    }
+
+    .form-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      outline: none;
+    }
+
+    .btn-login {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-login:hover {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-center items-center relative overflow-hidden">
+  
+  <!-- Background Decorations -->
+  <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-30 animate-blob"></div>
+  <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-30 animate-blob animation-delay-2000"></div>
+
+  <div class="glass-panel p-10 rounded-2xl w-full max-w-md z-10 mx-4">
+    <div class="text-center mb-8">
+      <div class="flex items-center justify-center mb-4">
+        <img src="logo.svg" alt="Logo" class="h-10 mr-2 drop-shadow-md" />
+        <div class="text-3xl tracking-tight text-white font-medium"><strong class="text-[#0A6FC7] font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">D</strong>-Meter</div>
+      </div>
+      <p class="text-slate-400 text-sm">Controle Inteligente de Consumo</p>
+    </div>
+
+    <form id="form-login" class="space-y-6">
+      <div>
+        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Seu Nome / Usuário</label>
+        <input type="text" id="ipt-nome" required
+          class="form-input w-full px-4 py-3 rounded-xl"
+          placeholder="Digite seu nome"
+        />
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Sua Senha</label>
+        <input type="password" id="ipt-senha" required
+          class="form-input w-full px-4 py-3 rounded-xl"
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div id="error-msg" class="hidden text-sm text-red-400 text-center font-medium bg-red-900/30 py-2 rounded">
+        Usuário ou senha incorretos!
+      </div>
+
+      <button type="submit" id="btn-submit"
+        class="btn-login w-full py-3 rounded-xl font-bold text-white shadow-lg mt-2 flex justify-center">
+        Acessar Painel
+      </button>
+    </form>
+    
+    <div class="mt-8 text-center text-xs text-slate-500">
+      Caso não tenha acesso, solicite ao Administrador.
+    </div>
+  </div>
+
+  <script type="module">
+    const SUPABASE_URL = "https://jmdlraaprcztshkfyeud.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_2c7MrFAZaCiQzY_EuQuizQ_wTgAzbIC";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // If already logged in, redirect
+    if (localStorage.getItem('userAuth')) {
+      window.location.href = 'dashboard.html';
+    }
+
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const nome = document.getElementById('ipt-nome').value.trim();
+      const senha = document.getElementById('ipt-senha').value;
+      const btn = document.getElementById('btn-submit');
+      const err = document.getElementById('error-msg');
+
+      btn.innerText = 'Verificando...';
+      btn.disabled = true;
+      err.classList.add('hidden');
+
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('nome', nome)
+          .eq('senha', senha);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const user = data[0];
+          // Logged in!
+          localStorage.setItem('userAuth', JSON.stringify(user));
+          if(user.perfil === 'admin') localStorage.setItem('admin_logged', 'true');
+          window.location.href = 'dashboard.html';
+        } else {
+          // Check hardcoded legacy
+          if (nome === 'admin' && senha === 'admin') {
+             localStorage.setItem('userAuth', JSON.stringify({nome: 'admin', perfil: 'admin'}));
+             localStorage.setItem('admin_logged', 'true');
+             window.location.href = 'dashboard.html';
+          } else {
+             err.classList.remove('hidden');
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Erro ao comunicar com banco de dados.');
+      } finally {
+        btn.innerText = 'Acessar Painel';
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

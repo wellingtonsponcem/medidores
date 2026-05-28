@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel Admin — Calculadora de Consumo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+  <!-- Mobile: Manrope + Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f4f6f8; color: #1e293b; }
+    
+    /* Navbar Tabs */
+    .nav-item { padding-bottom: 1rem; border-bottom: 2px solid transparent; transition: all 0.2s ease; cursor: pointer; }
+    .nav-item.active-nav { border-bottom-color: #0f172a; color: #0f172a; font-weight: 700; }
+    .nav-item:not(.active-nav) { color: #64748b; font-weight: 600; }
+    .nav-item:not(.active-nav):hover { color: #334155; }
+    
+    /* Table */
+    .table-container { overflow-x: auto; max-width: 100%; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    th { padding: 0.75rem 0.5rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; border-bottom: 2px solid #f1f5f9; }
+    td { padding: 0.75rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; color: #475569; white-space: nowrap; }
+    tr:hover td { background: #f8fafc; }
+    
+    /* Inputs inside table */
+    .edit-input { border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.25rem 0.5rem; width: 80px; font-size: 0.875rem; color: #334155; outline: none; transition: border-color 0.2s; }
+    .edit-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+    .edit-input.date-input { width: 120px; }
+    
+    /* Buttons */
+    .btn-action { padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.025em; }
+    .btn-edit { background: #f1f5f9; color: #475569; }
+    .btn-edit:hover { background: #e2e8f0; color: #0f172a; }
+    .btn-save { background: #10b981; color: white; }
+    .btn-save:hover { background: #059669; }
+    .btn-delete { background: transparent; color: #ef4444; }
+    .btn-delete:hover { background: #fee2e2; }
+    
+    /* Deltas */
+    .delta-badge { font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; }
+    .delta-up { color: #10b981; }
+    .delta-down { color: #3b82f6; }
+    .delta-neutral { color: #94a3b8; }
+
+    /* ============================================================ */
+    /* MOBILE STYLES (only applied below md breakpoint)             */
+    /* ============================================================ */
+    .mobile-material {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Mobile color tokens (matching Stitch output) */
+    :root {
+      --m-background: #f7f9fb;
+      --m-on-background: #191c1e;
+      --m-surface: #f7f9fb;
+      --m-surface-container-lowest: #ffffff;
+      --m-surface-container-low: #f2f4f6;
+      --m-surface-container: #eceef0;
+      --m-on-surface: #191c1e;
+      --m-primary: #005dac;
+      --m-primary-container: #1976d2;
+      --m-primary-fixed: #d4e3ff;
+      --m-primary-fixed-dim: #a5c8ff;
+      --m-on-primary: #ffffff;
+      --m-secondary: #964900;
+      --m-secondary-container: #fc820c;
+      --m-error: #ba1a1a;
+      --m-tertiary: #525e65;
+      --m-outline-variant: #c1c6d4;
+    }
+
+    /* Mobile bar chart animation */
+    @keyframes barGrow {
+      from { transform: scaleY(0); transform-origin: bottom; }
+      to   { transform: scaleY(1); transform-origin: bottom; }
+    }
+    .mobile-bar { animation: barGrow 0.5s ease-out forwards; transform-origin: bottom; }
+
+    /* Mobile container — only visible below md */
+    #mobile-layout { display: none; }
+    @media (max-width: 767px) {
+      #mobile-layout { display: flex; flex-direction: column; min-height: 100dvh; background: var(--m-background); }
+      #desktop-layout { display: none !important; }
+      body { background: var(--m-background); font-family: 'Inter', sans-serif; }
+    }
+
+    .mobile-shell {
+      position: relative;
+      overflow: hidden;
+    }
+    .mobile-shell::before,
+    .mobile-shell::after {
+      content: "";
+      position: fixed;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(60px);
+      opacity: 0.5;
+      z-index: 0;
+    }
+    .mobile-shell::before {
+      top: -80px;
+      right: -50px;
+      width: 180px;
+      height: 180px;
+      background: rgba(25, 118, 210, 0.16);
+    }
+    .mobile-shell::after {
+      bottom: 40px;
+      left: -70px;
+      width: 190px;
+      height: 190px;
+      background: rgba(252, 130, 12, 0.12);
+    }
+    .mobile-topbar,
+    .mobile-main,
+    #mob-bottom-nav {
+      position: relative;
+      z-index: 1;
+    }
+    .mobile-topbar {
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(193,198,212,0.35);
+      box-shadow: 0 10px 30px rgba(25, 28, 30, 0.05);
+    }
+    .mobile-topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mobile-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      background: linear-gradient(145deg, #f7fbff, #dceafd);
+      border: 1px solid rgba(0,93,172,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #005dac;
+    }
+    .mobile-headline {
+      font-family: 'Manrope', sans-serif;
+      color: var(--m-on-background);
+      letter-spacing: -0.03em;
+    }
+    .mobile-subtle {
+      color: var(--m-tertiary);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .mobile-icon-button {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid rgba(193,198,212,0.3);
+      background: rgba(255,255,255,0.9);
+      color: #005dac;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 18px rgba(25,28,30,0.05);
+    }
+    .mobile-section-card {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(193,198,212,0.18);
+      border-radius: 28px;
+      box-shadow: 0 18px 42px rgba(25,28,30,0.05);
+    }
+    .mobile-kpi-card {
+      min-width: 210px;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(193,198,212,0.18);
+      border-radius: 28px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 14px 34px rgba(25,28,30,0.05);
+    }
+    .mobile-kpi-card.is-highlight {
+      background: linear-gradient(165deg, #ffffff 0%, #eef5ff 100%);
+      border-color: rgba(25,118,210,0.14);
+    }
+    .mobile-pill-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 800;
+      color: #525e65;
+    }
+    .mobile-log-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: rgba(242,244,246,0.85);
+      border-radius: 999px;
+      border: 1px solid rgba(193,198,212,0.12);
+    }
+    .mobile-history-shell {
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(193,198,212,0.18);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 14px 34px rgba(25,28,30,0.04);
+    }
+    .mobile-bottom-nav {
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-top: 1px solid rgba(193,198,212,0.32);
+      box-shadow: 0 -10px 32px rgba(25,28,30,0.08);
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    }
+    .mobile-bottom-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 16px;
+      border-radius: 16px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .mobile-bottom-item.is-active {
+      background: #eff4ff;
+      color: #005dac;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="text-slate-800">
+
+<!-- ================================================================ -->
+<!--  DESKTOP LAYOUT (hidden on mobile — untouched)                   -->
+<!-- ================================================================ -->
+<div id="desktop-layout">
+  <!-- Navbar Superior -->
+  <nav class="bg-white border-b border-slate-200 px-6 pt-5 pb-0 flex flex-col md:flex-row items-center justify-between shadow-sm sticky top-0 z-50">
+    <div class="flex items-center w-full md:w-auto justify-between md:justify-start mb-4 md:mb-0">
+      <div class="flex items-center mr-12 hover:opacity-90 transition">
+        <img src="logo.svg" alt="Logo" class="h-8 mr-2 drop-shadow-sm" />
+        <div class="text-2xl tracking-tight text-slate-800 font-medium"><strong class="text-[#0A6FC7] font-black">D</strong>-Meter</div>
+      </div>
+      
+      <!-- Mobile Profile (only visible on small screens) -->
+      <div class="md:hidden flex items-center space-x-3">
+        <div class="w-8 h-8 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold">W</div>
+      </div>
+    </div>
+    
+    <!-- Central Tabs -->
+    <div class="flex space-x-8 font-semibold text-slate-500 w-full md:w-auto overflow-x-auto no-scrollbar">
+      <button id="tab-agua" class="nav-item active-nav">Performance Água</button>
+      <button id="tab-energia" class="nav-item">Performance Energia</button>
+    </div>
+    
+    <!-- Desktop Profile -->
+    <div class="hidden md:flex items-center space-x-3 pb-4">
+      <a href="admin-painel.html" id="btn-go-admin" class="hidden mr-4 bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition">⚙️ Painel Admin</a>
+      <div class="text-sm font-medium text-slate-600" id="top-user-name">Olá, Morador</div>
+      <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold" id="top-user-initial">M</div>
+      <button onclick="abrirModalSenha(false)" class="ml-2 text-xs font-bold text-blue-500 hover:text-blue-700 transition" title="Redefinir minha senha atual">Mudar Senha</button>
+      <button onclick="sessionStorage.removeItem('ignored_pwd'); localStorage.removeItem('userAuth'); localStorage.removeItem('admin_logged'); window.location.href='index.html';" class="ml-2 text-xs font-bold text-red-500 hover:text-red-700 transition">Sair</button>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="w-[90%] mx-auto mt-8 px-4 grid grid-cols-1 xl:grid-cols-4 gap-8 pb-12">
+    
+    <!-- Alertas Flash -->
+    <div id="status-alerta" class="hidden xl:col-span-4 p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 font-medium text-sm"></div>
+
+    <!-- Left/Main Column -->
+    <div class="xl:col-span-3 space-y-8">
+      
+      <!-- Top header / progress -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between bg-white px-6 py-4 rounded-xl border border-slate-100 shadow-sm">
+         <div class="flex items-center">
+            <span class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mr-6" id="target-title">Indicadores de Água</span>
+            <div class="flex items-center space-x-2">
+               <span class="text-[10px] font-black text-blue-600 bg-blue-50/50 border border-blue-100 px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm" id="target-percent">100% Pronto</span>
+               <div id="meter-selector-wrap" class="hidden">
+                 <select id="meter-selector" class="text-[10px] font-black uppercase tracking-widest bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 cursor-pointer outline-none hover:bg-white transition shadow-sm text-slate-600">
+                   <option value="rua_inhambu">Rua Inhambu</option>
+                   <option value="av_brasil">Av. Brasil</option>
+                 </select>
+               </div>
+            </div>
+         </div>
+         <div class="text-xs font-semibold text-slate-400 mt-2 md:mt-0 flex items-center">
+           <svg class="w-4 h-4 mr-1 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+           Essas informações são visíveis apenas para os administradores.
+         </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Evolução do Consumo (6 Meses)</h2>
+          <div class="flex space-x-2">
+            <button id="btn-chart-monthly" class="px-3 py-1 text-xs font-bold bg-slate-800 text-white rounded-md shadow-sm">6 Meses</button>
+            <button id="btn-chart-annual" class="px-3 py-1 text-xs font-bold bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-md">1 ano</button>
+          </div>
+        </div>
+        <div class="relative h-72 w-full">
+           <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+
+      <!-- KPIs (injected by JS) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="kpi-panel">
+         <!-- Cards will look like Oaze SaaS metric blocks -->
+      </div>
+      
+      <!-- Tables -->
+      <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden" id="tables-wrapper">
+        <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/30 flex justify-between items-center">
+          <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest" id="table-title">Histórico Detalhado</h2>
+        </div>
+
+        <!-- Tabela de Água -->
+        <div id="view-agua" class="table-container p-6">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Cesan Líquido</th>
+                <th id="th-ag-h1">Rateio H1</th>
+                <th id="th-ag-h2">Rateio H2</th>
+                <th id="th-ag-h3">Rateio H3</th>
+                <th>Rateio Serviço</th>
+                <th>Fatura Bruta (R$)</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-agua">
+              <tr><td colspan="7" class="text-center py-8 text-slate-400 text-sm">Sincronizando banco de dados...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tabela de Energia -->
+        <div id="view-energia" class="table-container p-6 hidden">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th id="th-en-casa1">Custo Casa 1</th>
+                <th id="th-en-casa2">Custo Casa 2</th>
+                <th>Fatura Total (R$)</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-energia">
+              <tr><td colspan="5" class="text-center py-8 text-slate-400 text-sm">Sincronizando banco de dados...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="space-y-8">
+      
+      <!-- Date / Weather Widget -->
+      <div class="bg-white p-6 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+         <div class="absolute top-0 right-0 p-4 opacity-10">
+            <svg class="w-16 h-16 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+         </div>
+         <div class="text-3xl font-light text-slate-800" id="current-day">12</div>
+         <div class="text-sm font-bold text-slate-600 uppercase tracking-wide mt-1" id="current-month-year">Novembro, 2026</div>
+         <div class="text-xs text-slate-400 mt-1 mb-6">Ambiente de Visualização</div>
+      </div>
+
+      <!-- Activities / Alerts -->
+      <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-white">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Logs Recentes</h3>
+        </div>
+        <div class="divide-y divide-slate-50 bg-slate-50/20" id="activity-log">
+           <!-- Mock Logs as requested for SaaS feel -->
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                 ATUALIZAÇÃO DE SISTEMA
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Painel SaaS implementado com sucesso na base de produção.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Há 1 hora</div>
+           </div>
+           
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-green-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                 BANCO DE DADOS
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Views financeiras (vw_agua_rateio) foram inicializadas de forma segura.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Há 2 horas</div>
+           </div>
+           
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                 AVISO
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Autenticação de usuários restritos está agendada para a próxima fase.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Pendente</div>
+           </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div><!-- /desktop-layout -->
+
+
+<!-- ================================================================ -->
+<!--  MOBILE LAYOUT (hidden on md+ — based on Stitch design)          -->
+<!-- ================================================================ -->
+<div id="mobile-layout" class="mobile-shell">
+
+  <!-- Fixed Header -->
+  <header class="mobile-topbar" style="position:fixed;top:0;left:0;right:0;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+    <div class="mobile-topbar-brand">
+      <div class="mobile-avatar" id="mob-user-avatar">M</div>
+      <div style="display:flex;flex-direction:column;gap:1px;">
+        <span style="font-family:'Manrope',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.5px;color:#005dac;">D-Meter</span>
+        <span class="mobile-subtle" style="font-size:9px;letter-spacing:0.18em;">Painel Mobile</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="mobile-icon-button" onclick="sessionStorage.removeItem('ignored_pwd'); localStorage.removeItem('userAuth'); localStorage.removeItem('admin_logged'); window.location.href='index.html';" style="cursor:pointer;color:#525e65;">
+        <span class="material-symbols-outlined mobile-material" style="font-size:22px;">logout</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Scrollable Main Content -->
+  <main class="mobile-main" style="margin-top:64px;padding:20px 16px 120px;display:flex;flex-direction:column;gap:20px;background:var(--m-background);">
+
+    <!-- Hero Section -->
+    <section style="margin-top:18px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <span class="mobile-subtle">Visão Geral</span>
+        <h1 id="mob-hero-title" class="mobile-headline" style="font-size:31px;font-weight:800;line-height:1.08;">Consumo de Água</h1>
+        <p id="mob-hero-subtitle" style="font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--m-tertiary);max-width:260px;">Dashboard de Gestão de Recursos</p>
+      </div>
+    </section>
+
+    <!-- Summary Cards: Horizontal Scroll -->
+    <section style="margin-left:-16px;margin-right:-16px;padding-left:16px;overflow-x:auto;display:flex;gap:12px;padding-bottom:4px;" class="no-scrollbar" id="mob-cards-section">
+      <!-- Cards injected by JS -->
+    </section>
+
+    <!-- Chart Section -->
+    <section class="mobile-section-card" style="padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 id="mob-chart-title" style="font-family:'Manrope',sans-serif;font-size:16px;font-weight:700;color:var(--m-on-surface);">Evolução do Consumo</h2>
+        <span style="font-size:10px;font-weight:600;color:var(--m-tertiary);background:var(--m-surface-container);padding:3px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:0.05em;">6 Meses</span>
+      </div>
+      <!-- Bar chart area -->
+      <div id="mob-bar-chart" style="height:190px;width:100%;display:flex;align-items:flex-end;justify-content:space-between;gap:6px;padding:0 4px;">
+        <!-- Bars injected by JS -->
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;flex:1;height:100%;">
+          <div style="width:100%;background:#d4e3ff;border-radius:4px 4px 0 0;height:40%;"></div>
+          <span style="font-size:9px;font-weight:700;color:#525e65;">...</span>
+        </div>
+      </div>
+      <!-- Alert banner -->
+      <div id="mob-chart-alert" style="margin-top:16px;padding:12px;background:rgba(252,130,12,0.08);border-radius:14px;display:flex;align-items:center;gap:10px;">
+        <span class="material-symbols-outlined mobile-material" style="font-size:20px;color:#964900;font-variation-settings:'FILL' 1;">warning</span>
+        <p id="mob-chart-alert-text" style="font-size:11px;font-weight:500;color:#5e2c00;line-height:1.4;">Carregando dados...</p>
+      </div>
+    </section>
+
+    <!-- Histórico Detalhado -->
+    <section>
+      <h2 style="font-family:'Manrope',sans-serif;font-size:16px;font-weight:700;color:var(--m-on-surface);margin-bottom:14px;">Histórico Detalhado</h2>
+      <div class="mobile-history-shell">
+        <div id="mob-history-list" style="display:flex;flex-direction:column;">
+          <!-- History rows injected by JS -->
+          <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--m-surface-container);">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-size:12px;font-weight:700;color:var(--m-on-surface);">Carregando...</span>
+              <span style="font-size:10px;color:var(--m-tertiary);">Aguarde os dados</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span style="font-size:13px;font-weight:800;color:var(--m-primary);font-family:'Manrope',sans-serif;">—</span>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 16px;background:var(--m-surface-container-low);text-align:center;">
+          <button style="font-size:10px;font-weight:700;color:var(--m-primary);background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;">Ver Histórico Completo</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <nav id="mob-bottom-nav" class="mobile-bottom-nav" style="position:fixed;bottom:0;left:0;right:0;z-index:50;display:flex;justify-content:space-around;align-items:center;padding:10px 8px 0;border-radius:28px 28px 0 0;">
+    <button id="mob-nav-agua" class="mobile-bottom-item is-active" onclick="mobileSwitchTab('agua')">
+      <span class="material-symbols-outlined mobile-material" style="font-size:22px;font-variation-settings:'FILL' 1;">water_drop</span>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-top:1px;">Água</span>
+    </button>
+    <button id="mob-nav-energia" class="mobile-bottom-item" onclick="mobileSwitchTab('energia')">
+      <span class="material-symbols-outlined mobile-material" style="font-size:22px;">bolt</span>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-top:1px;">Energia</span>
+    </button>
+  </nav>
+
+</div><!-- /mobile-layout -->
+
+<!-- Modal de Senha do Usuário -->
+<div id="modal-senha" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+    <h2 class="text-lg font-black text-slate-800 mb-2">Segurança da Conta</h2>
+    <p class="text-sm text-slate-500 mb-6" id="txt-modal-senha">Altere a sua senha de acesso atual para manter seus dados seguros.</p>
+    <div class="space-y-4">
+      <input type="password" id="ipt-nova-senha" class="w-full border border-slate-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500" placeholder="Digite a nova senha">
+      <div class="flex gap-3">
+        <button id="btn-modal-senha-cancel" onclick="ignorarSenha()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition">Ignorar</button>
+        <button onclick="salvarNovaSenha()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition shadow-sm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+
+<script>
+  // Widget de data (desktop)
+  const today = new Date();
+  const todayEl = document.getElementById('current-day');
+  if (todayEl) todayEl.textContent = today.getDate();
+  const monthYearEl = document.getElementById('current-month-year');
+  if (monthYearEl) {
+    const strMonth = today.toLocaleString('pt-BR', { month: 'long' });
+    monthYearEl.textContent = strMonth.charAt(0).toUpperCase() + strMonth.slice(1) + ', ' + today.getFullYear();
+  }
+
+  // ========================================================
+  // MOBILE LOGIC
+  // ========================================================
+  const mobUserAuth = JSON.parse(localStorage.getItem('userAuth') || 'null');
+  let mobCurrentTab = (mobUserAuth?.perfil === 'loja2') ? 'energia' : 'agua';
+  
+  const mobIsCasa1 = mobUserAuth?.perfil === 'casa1';
+  const mobIsCasa2 = mobUserAuth?.perfil === 'casa2';
+  const mobIsCasa3 = mobUserAuth?.perfil === 'casa3';
+  const mobIsLoja2 = mobUserAuth?.perfil === 'loja2';
+  const mobIsAdmin = mobUserAuth?.perfil === 'admin';
+
+  function fmtMoneyMob(val) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+  }
+
+  function fmtDateMob(raw) {
+    if (!raw) return '-';
+    const s = String(raw).trim();
+    const brMatch = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+    if (brMatch) return brMatch[2] + '/' + brMatch[3]; // MM/YYYY
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      return months[parseInt(isoMatch[2])-1] + '/' + isoMatch[1];
+    }
+    return s.substring(0, 7);
+  }
+
+  function fmtDateVencMob(raw) {
+    if (!raw) return '-';
+    const s = String(raw).trim();
+    const brMatch = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+    if (brMatch) return brMatch[1] + '/' + brMatch[2] + '/' + brMatch[3];
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return isoMatch[3] + '/' + isoMatch[2] + '/' + isoMatch[1];
+    return s;
+  }
+
+  function mobileSwitchTab(tab) {
+    mobCurrentTab = tab;
+    // Update bottom nav appearance
+    const navAgua = document.getElementById('mob-nav-agua');
+    const navEnergia = document.getElementById('mob-nav-energia');
+    if (tab === 'agua') {
+      navAgua.classList.add('is-active');
+      navEnergia.classList.remove('is-active');
+      navAgua.querySelector('span').style.fontVariationSettings = "'FILL' 1";
+      navEnergia.querySelector('span').style.fontVariationSettings = "'FILL' 0";
+    } else {
+      navEnergia.classList.add('is-active');
+      navAgua.classList.remove('is-active');
+      navEnergia.querySelector('span').style.fontVariationSettings = "'FILL' 1";
+      navAgua.querySelector('span').style.fontVariationSettings = "'FILL' 0";
+    }
+    renderMobileDashboard();
+  }
+
+  function getMobResidentSeriesMeta(tab) {
+    if (tab === 'agua') {
+      if (mobIsCasa1) return { amountKey: 'valor_h1', consumptionKey: 'consumo_h1', label: 'Seu Rateio', unit: 'm³', extra: 'Consumo da sua casa' };
+      if (mobIsCasa2) return { amountKey: 'valor_h2', consumptionKey: 'consumo_h2', label: 'Seu Rateio', unit: 'm³', extra: 'Consumo da sua casa' };
+      if (mobIsCasa3) return { amountKey: 'valor_h3', consumptionKey: 'consumo_h3', label: 'Rateio H3', unit: 'm³', extra: 'Seu hidrômetro individual' };
+      return { amountKey: 'valor_fatura_total', consumptionKey: 'consumo_cesan', label: 'Fatura Geral', unit: 'm³', extra: 'Visão geral' };
+    }
+
+    if (mobIsCasa1) return { amountKey: 'valor_casa_1', consumptionKey: 'consumo_casa_1', label: 'Sua Conta', unit: 'kWh', extra: 'Consumo da sua casa' };
+    if (mobIsCasa2) return { amountKey: 'valor_casa_2', consumptionKey: 'consumo_casa_2', label: 'Sua Conta', unit: 'kWh', extra: 'Consumo da sua casa' };
+    if (mobIsCasa3) return { amountKey: 'valor_casa_2', consumptionKey: 'consumo_casa_2', label: 'Sua Conta', unit: 'kWh', extra: 'Consumo da sua unidade' };
+    if (mobIsLoja2) return { amountKey: 'valor_casa_1', consumptionKey: 'consumo_casa_1', label: 'Sua Conta', unit: 'kWh', extra: 'Consumo da sua unidade' };
+    return { amountKey: 'valor_fatura_total', consumptionKey: null, label: 'Fatura Geral', unit: 'kWh', extra: 'Visão geral' };
+  }
+
+  function getMobAmount(row, meta) {
+    return Number(row?.[meta.amountKey] || 0);
+  }
+
+  function getMobConsumption(row, meta) {
+    if (!meta.consumptionKey) return null;
+    const value = row?.[meta.consumptionKey];
+    return value === null || value === undefined ? null : Number(value);
+  }
+
+  function renderMobileDashboard() {
+    const tab = mobCurrentTab;
+    const arr = window.state ? window.state[tab] : [];
+    const meta = getMobResidentSeriesMeta(tab);
+
+    // Hero title
+    const heroTitle = document.getElementById('mob-hero-title');
+    const heroSub = document.getElementById('mob-hero-subtitle');
+    if (heroTitle) {
+      heroTitle.textContent = tab === 'agua' ? 'Consumo de Água' : 'Consumo de Energia';
+    }
+    if (heroSub) {
+      heroSub.textContent = mobIsAdmin
+        ? (tab === 'agua' ? 'Dashboard de Gestão de Recursos' : 'Dashboard de Gestão de Energia')
+        : (tab === 'agua' ? 'Resumo da sua conta de água' : 'Resumo da sua conta de energia');
+    }
+
+    // Chart title
+    const chartTitle = document.getElementById('mob-chart-title');
+    if (chartTitle) chartTitle.textContent = 'Evolução do Consumo';
+
+    if (!arr || arr.length === 0) {
+      // No data yet — keep placeholders
+      updateMobCards(null, null, null, tab, null, null, null, meta);
+      return;
+    }
+
+    const latest = arr[0];
+    const prevRow = arr[1] || null;
+    const last6 = arr.slice(0, 6);
+
+    // KPI values
+    const valFatura = getMobAmount(latest, meta);
+    const prevFatura = prevRow ? getMobAmount(prevRow, meta) : null;
+    const faturaPerc = prevFatura ? ((valFatura - prevFatura) / prevFatura * 100) : null;
+
+    const sumFatura = last6.reduce((acc, r) => acc + getMobAmount(r, meta), 0);
+    const avgFatura = sumFatura / last6.length;
+
+    const unitCost = tab === 'agua' ? Number(latest.valor_por_m3) : Number(latest.valor_kwh);
+    const unitLabel = tab === 'agua' ? 'R$/m³' : 'R$/kWh';
+    const unitExtra = mobIsAdmin ? (tab === 'agua' ? 'Residencial B' : 'Bandeira Atual') : meta.extra;
+
+    updateMobCards(valFatura, faturaPerc, avgFatura, tab, unitCost, unitLabel, unitExtra, meta);
+    updateMobChart(last6.slice().reverse(), tab, meta);
+    updateMobHistory(arr, tab, meta);
+  }
+
+  function updateMobCards(fatura, fatPerc, avg, tab, unitCost, unitLabel, unitExtra, meta) {
+    const section = document.getElementById('mob-cards-section');
+    if (!section) return;
+
+    const faturaStr = fatura !== null ? fmtMoneyMob(fatura) : '—';
+    const avgStr = avg !== null ? fmtMoneyMob(avg) : '—';
+    const unitStr = unitCost !== null ? fmtMoneyMob(unitCost) : '—';
+
+    const percColor = (fatPerc !== null && fatPerc > 0) ? '#ba1a1a' : '#005dac';
+    const percIcon = (fatPerc !== null && fatPerc > 0) ? 'trending_up' : 'trending_down';
+    const percText = fatPerc !== null ? (fatPerc > 0 ? '+' : '') + fatPerc.toFixed(1) + '%' : 'Estável';
+
+    section.innerHTML = `
+      <!-- Card 1: Última Fatura -->
+      <div class="mobile-kpi-card is-highlight">
+        <span class="mobile-pill-label">${meta.label}</span>
+        <div style="margin-top:6px;">
+          <span style="font-family:'Manrope',sans-serif;font-size:22px;font-weight:800;color:#005dac;">${faturaStr}</span>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:4px;color:${percColor};font-size:10px;font-weight:700;">
+          <span class="material-symbols-outlined mobile-material" style="font-size:13px;">${percIcon}</span>
+          <span>${percText}</span>
+        </div>
+      </div>
+      <!-- Card 2: Gasto Médio -->
+      <div class="mobile-kpi-card">
+        <span class="mobile-pill-label">Gasto Médio</span>
+        <div style="margin-top:6px;">
+          <span style="font-family:'Manrope',sans-serif;font-size:22px;font-weight:800;color:#191c1e;">${avgStr}</span>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:4px;color:#005dac;font-size:10px;font-weight:700;">
+          <span class="material-symbols-outlined mobile-material" style="font-size:13px;">trending_flat</span>
+          <span>Últimos 6 meses</span>
+        </div>
+      </div>
+      <!-- Card 3: Tarifa -->
+      <div class="mobile-kpi-card">
+        <span class="mobile-pill-label">Tarifa Atual</span>
+        <div style="margin-top:6px;">
+          <span style="font-family:'Manrope',sans-serif;font-size:22px;font-weight:800;color:#964900;">${unitStr}</span>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:4px;color:#525e65;font-size:10px;font-weight:700;text-transform:uppercase;">
+          <span>${unitExtra || unitLabel || ''}</span>
+        </div>
+      </div>
+      <!-- Padding end -->
+      <div style="min-width:4px;flex-shrink:0;"></div>
+    `;
+  }
+
+  function updateMobChart(dataAsc, tab, meta) {
+    const chartEl = document.getElementById('mob-bar-chart');
+    const alertEl = document.getElementById('mob-chart-alert');
+    const alertText = document.getElementById('mob-chart-alert-text');
+    if (!chartEl) return;
+
+    if (!dataAsc || dataAsc.length === 0) {
+      chartEl.innerHTML = '<div style="width:100%;text-align:center;color:#94a3b8;font-size:12px;padding:20px 0;">Sem dados</div>';
+      return;
+    }
+
+    const values = dataAsc.map(r => getMobAmount(r, meta));
+    const maxVal = Math.max(...values);
+    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+    function getMonthLabel(raw) {
+      if (!raw) return '?';
+      const s = String(raw).trim();
+      const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return months[parseInt(isoMatch[2])-1];
+      const brMatch = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+      if (brMatch) return months[parseInt(brMatch[2])-1];
+      return s.substring(0,3);
+    }
+
+    const lastIdx = dataAsc.length - 1;
+    chartEl.innerHTML = dataAsc.map((r, i) => {
+      const amount = getMobAmount(r, meta);
+      const pct = maxVal > 0 ? Math.max(10, (amount / maxVal) * 100) : 10;
+      const isActive = i === lastIdx;
+      const barColor = isActive ? '#1976d2' : '#d4e3ff';
+      const labelColor = isActive ? '#005dac' : '#525e65';
+      const labelWeight = isActive ? '800' : '700';
+      return `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;flex:1;height:100%;">
+          <div class="mobile-bar" style="width:100%;background:${barColor};border-radius:5px 5px 0 0;height:${pct}%;min-height:18px;position:relative;" title="${fmtMoneyMob(amount)}">
+          </div>
+          <span style="font-size:9px;font-weight:${labelWeight};color:${labelColor};">${getMonthLabel(r.data_leitura)}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Alert about latest vs average
+    if (alertEl && alertText && dataAsc.length >= 2) {
+      const latestVal = values[lastIdx];
+      const avgExcLast = values.slice(0, lastIdx).reduce((a, b) => a + b, 0) / Math.max(1, lastIdx);
+      if (avgExcLast > 0) {
+        const diff = ((latestVal - avgExcLast) / avgExcLast) * 100;
+        if (diff > 5) {
+          alertText.textContent = `Consumo atual está ${diff.toFixed(0)}% acima da sua média dos meses anteriores.`;
+          alertEl.style.background = 'rgba(252,130,12,0.08)';
+          alertEl.querySelector('span').style.color = '#964900';
+          alertText.style.color = '#5e2c00';
+          alertEl.style.display = 'flex';
+        } else if (diff < -5) {
+          alertEl.style.background = 'rgba(0,93,172,0.06)';
+          alertEl.querySelector('span').style.color = '#005dac';
+          alertText.style.color = '#004786';
+          alertText.textContent = `Consumo atual está ${Math.abs(diff).toFixed(0)}% abaixo da sua média. Ótimo!`;
+          alertEl.style.display = 'flex';
+        } else {
+          alertEl.style.display = 'none';
+        }
+      } else {
+        alertEl.style.display = 'none';
+      }
+    }
+  }
+
+  function updateMobHistory(arr, tab, meta) {
+    const list = document.getElementById('mob-history-list');
+    if (!list || !arr || arr.length === 0) return;
+
+    const rows = arr.slice(0, 5);
+    list.innerHTML = rows.map((r, i) => {
+      const dateLabel = fmtDateMob(r.data_leitura);
+      const consumption = getMobConsumption(r, meta);
+      const subLabel = consumption !== null
+        ? `${consumption.toFixed(1)} ${meta.unit}`
+        : 'Venc: ' + fmtDateVencMob(r.data_leitura);
+      const amount = fmtMoneyMob(getMobAmount(r, meta));
+      const isLast = i === rows.length - 1;
+      return `
+        <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;${!isLast ? 'border-bottom:1px solid var(--m-surface-container);' : ''}">
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <span style="font-size:12px;font-weight:700;color:var(--m-on-surface);">${dateLabel}</span>
+            <span style="font-size:10px;color:var(--m-tertiary);">${subLabel}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+            <span style="font-size:13px;font-weight:800;color:var(--m-primary);font-family:'Manrope',sans-serif;">${amount}</span>
+            <span style="font-size:9px;color:var(--m-tertiary);text-transform:uppercase;font-weight:700;">${meta.label}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Hook into app.js state updates for mobile
+  // We poll/listen after data loads
+  function setupMobileHook() {
+    // Override the updateDashboard function to also update mobile
+    const originalUpdateDashboard = window.updateDashboard;
+    if (typeof originalUpdateDashboard === 'function') {
+      window.updateDashboard = function() {
+        originalUpdateDashboard.call(this);
+        if (window.innerWidth < 768) {
+          renderMobileDashboard();
+        }
+      };
+    }
+
+    // Also update user avatar on mobile
+    const userAuth = JSON.parse(localStorage.getItem('userAuth') || 'null');
+    if (userAuth) {
+      const avatar = document.getElementById('mob-user-avatar');
+      if (avatar) {
+        avatar.textContent = (userAuth.nome || 'M').charAt(0).toUpperCase();
+      }
+      // Hide water tab for Loja 2 on mobile
+      if (userAuth.perfil === 'loja2') {
+        const mobNavAgua = document.getElementById('mob-nav-agua');
+        if (mobNavAgua) mobNavAgua.classList.add('hidden');
+        if (mobCurrentTab === 'agua') {
+          mobileSwitchTab('energia');
+        }
+      }
+    }
+  }
+
+  // Wait for app.js to fully initialize, then hook in
+  document.addEventListener('DOMContentLoaded', () => {
+    setupMobileHook();
+
+    // Fallback: poll for data if hook didn't catch
+    let mobCheckAttempts = 0;
+    const mobCheckInterval = setInterval(() => {
+      mobCheckAttempts++;
+      if (window.state && (window.state.agua.length > 0 || window.state.energia.length > 0)) {
+        renderMobileDashboard();
+        clearInterval(mobCheckInterval);
+      } else if (mobCheckAttempts > 30) {
+        clearInterval(mobCheckInterval);
+      }
+    }, 300);
+  });
+
+  // Also watch for tab changes from desktop tabs affecting mobile
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabAgua = document.getElementById('tab-agua');
+    const tabEnergia = document.getElementById('tab-energia');
+    if (tabAgua) tabAgua.addEventListener('click', () => { if(window.innerWidth < 768) { mobCurrentTab = 'agua'; renderMobileDashboard(); }});
+    if (tabEnergia) tabEnergia.addEventListener('click', () => { if(window.innerWidth < 768) { mobCurrentTab = 'energia'; renderMobileDashboard(); }});
+  });
+</script>
+</body>
+</html>

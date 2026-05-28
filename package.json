@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "basic-ftp": "^5.2.0",
+    "pg": "^8.20.0"
+  }
+}

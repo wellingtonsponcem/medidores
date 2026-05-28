@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel Admin — Calculadora de Consumo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f4f6f8; color: #1e293b; }
+    
+    /* Navbar Tabs */
+    .nav-item { padding-bottom: 1rem; border-bottom: 2px solid transparent; transition: all 0.2s ease; cursor: pointer; }
+    .nav-item.active-nav { border-bottom-color: #0f172a; color: #0f172a; font-weight: 700; }
+    .nav-item:not(.active-nav) { color: #64748b; font-weight: 600; }
+    .nav-item:not(.active-nav):hover { color: #334155; }
+    
+    /* Upload Cards */
+    .upload-card { position: relative; border: 2px dashed #cbd5e1; border-radius: 0.75rem; padding: 1rem 0.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: white; overflow: hidden; }
+    .upload-card:hover { border-color: #6366f1; background: #eef2ff; }
+    .upload-card span { font-size: 0.7rem; font-weight: 700; color: #475569; display: block; }
+    .upload-card.has-file { border-color: #10b981; background: #ecfdf5; }
+    .upload-card.active-drop { border-color: #6366f1; background: #eef2ff; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
+    .upload-card input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+    /* Table */
+    .table-container { overflow-x: auto; max-width: 100%; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    th { padding: 0.75rem 0.5rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; border-bottom: 2px solid #f1f5f9; }
+    td { padding: 0.75rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; color: #475569; white-space: nowrap; }
+    tr:hover td { background: #f8fafc; }
+    
+    /* Inputs inside table */
+    .edit-input { border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.25rem 0.5rem; width: 80px; font-size: 0.875rem; color: #334155; outline: none; transition: border-color 0.2s; }
+    .edit-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+    .edit-input.date-input { width: 120px; }
+    
+    /* Buttons */
+    .btn-action { padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.025em; }
+    .btn-edit { background: #f1f5f9; color: #475569; }
+    .btn-edit:hover { background: #e2e8f0; color: #0f172a; }
+    .btn-save { background: #10b981; color: white; }
+    .btn-save:hover { background: #059669; }
+    .btn-delete { background: transparent; color: #ef4444; }
+    .btn-delete:hover { background: #fee2e2; }
+    
+    /* Deltas */
+    .delta-badge { font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; }
+    .delta-up { color: #10b981; } /* Green for money up? Wait, if bill goes up it's bad. Let's use red for up in consumption */
+    .delta-down { color: #3b82f6; } /* Blue/Green for down */
+    .delta-neutral { color: #94a3b8; }
+    
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="text-slate-800">
+
+  <!-- Navbar Superior -->
+  <nav class="bg-white border-b border-slate-200 px-6 pt-5 pb-0 flex flex-col md:flex-row items-center justify-between shadow-sm sticky top-0 z-50">
+    <div class="flex items-center w-full md:w-auto justify-between md:justify-start mb-4 md:mb-0">
+      <div class="flex items-center mr-12 hover:opacity-90 transition cursor-default">
+        <img src="logo.svg" alt="Logo" class="h-8 mr-2 drop-shadow-sm" />
+        <div class="text-2xl tracking-tight text-slate-800 font-medium"><strong class="text-[#0A6FC7] font-black">D</strong>-Meter</div>
+      </div>
+      
+      <!-- Mobile Profile (only visible on small screens) -->
+      <div class="md:hidden flex items-center space-x-3">
+        <div class="w-8 h-8 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold">W</div>
+      </div>
+    </div>
+    
+    <!-- Central Tabs -->
+    <div class="flex space-x-8 font-semibold text-slate-500 w-full md:w-auto overflow-x-auto no-scrollbar">
+      <button id="tab-agua" class="nav-item active-nav">Leituras de Água</button>
+      <button id="tab-energia" class="nav-item">Leituras de Energia</button>
+      <button id="tab-moradores" class="nav-item">Acessos Moradores</button>
+      <a href="dashboard.html" class="nav-item text-blue-500">Modo de Visualização</a>
+    </div>
+    
+    <!-- Desktop Profile -->
+    <div class="hidden md:flex items-center space-x-3 pb-4">
+      <div class="text-sm font-medium text-slate-600">Olá, Admin</div>
+      <div class="w-8 h-8 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold">W</div>
+      <svg class="w-5 h-5 text-slate-400 cursor-pointer hover:text-slate-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="w-[90%] mx-auto mt-8 px-4 grid grid-cols-1 xl:grid-cols-4 gap-8 pb-12">
+    
+    <!-- Alertas Flash -->
+    <div id="status-alerta" class="hidden xl:col-span-4 p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 font-medium text-sm"></div>
+
+    <!-- Left/Main Column -->
+    <div class="xl:col-span-3 space-y-8">
+      
+      <!-- Top header / progress -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between bg-white px-6 py-4 rounded-xl border border-slate-100 shadow-sm">
+         <div class="flex items-center">
+            <span class="text-sm font-bold text-slate-800 uppercase tracking-widest mr-4" id="target-title">Indicadores de Água</span>
+            <span class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md" id="target-percent">100% Pronto</span>
+         </div>
+         <div class="text-xs font-semibold text-slate-400 mt-2 md:mt-0 flex items-center">
+           <svg class="w-4 h-4 mr-1 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+           Essas informações são visíveis apenas para os administradores.
+         </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center gap-4">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Evolução do Consumo (6 Meses)</h2>
+            <div id="energia-meter-switch" class="hidden">
+              <select id="energia-meter-select" class="border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 bg-white outline-none focus:border-blue-500">
+                <option value="rua_inhambu">Rua Inhambu</option>
+                <option value="av_brasil">Av Brasil</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <button class="px-3 py-1 text-xs font-bold bg-slate-800 text-white rounded-md shadow-sm">Mensal</button>
+            <button class="px-3 py-1 text-xs font-bold bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-md">Anual</button>
+          </div>
+        </div>
+        <div class="relative h-72 w-full">
+           <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+
+      <!-- KPIs (injected by JS) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="kpi-panel">
+         <!-- Cards will look like Oaze SaaS metric blocks -->
+      </div>
+      
+      <!-- Tables -->
+      <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden" id="tables-wrapper">
+        <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/30 flex justify-between items-center">
+          <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest" id="table-title">Histórico Detalhado</h2>
+        </div>
+
+        <!-- Tabela de Água -->
+        <div id="view-agua" class="table-container p-6">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Cesan Líquido</th>
+                <th>Rateio H1</th>
+                <th>Rateio H2</th>
+                <th>Rateio H3</th>
+                <th>Rateio Serviço</th>
+                <th>Fatura Bruta (R$)</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-agua">
+              <tr><td colspan="7" class="text-center py-8 text-slate-400 text-sm">Sincronizando banco de dados...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tabela de Energia -->
+        <div id="view-energia" class="table-container p-6 hidden">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th id="th-en-col-1">Custo Casa 1</th>
+                <th id="th-en-col-2">Custo Casa 2</th>
+                <th>Fatura Total (R$)</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-energia">
+              <tr><td colspan="5" class="text-center py-8 text-slate-400 text-sm">Sincronizando banco de dados...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tabela de Moradores -->
+        <div id="view-moradores" class="p-6 hidden">
+          <div class="bg-slate-50 rounded-xl p-5 border border-slate-200 mb-6">
+            <h3 class="text-sm font-bold text-slate-700 mb-4 uppercase tracking-widest">Criar Acesso para Morador</h3>
+            <form id="form-usuario" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Nome do Morador</label>
+                <input type="text" id="ipt-usr-nome" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Senha de Acesso</label>
+                <input type="password" id="ipt-usr-senha" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Vínculo (Casa)</label>
+                <select id="ipt-usr-perfil" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm font-bold text-slate-700 outline-none focus:border-blue-500">
+                  <option value="casa1">Casa 1</option>
+                  <option value="casa2">Casa 2</option>
+                  <option value="casa3">Casa 3</option>
+                  <option value="loja2">Loja 02</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <button type="submit" class="bg-blue-600 text-white font-bold text-xs uppercase tracking-widest py-3 px-4 rounded-lg hover:bg-blue-700 transition shadow-sm h-10 w-full mb-0.5">Criar Morador</button>
+            </form>
+          </div>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome do Morador</th>
+                  <th>Senha (Oculta)</th>
+                  <th>Vínculo / Perfil</th>
+                  <th class="text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-usuarios">
+                <tr><td colspan="4" class="text-center py-8 text-slate-400 text-sm">Carregando usuários...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="space-y-8">
+      
+      <!-- Date / Weather Widget -->
+      <div class="bg-white p-6 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+         <div class="absolute top-0 right-0 p-4 opacity-10">
+            <svg class="w-16 h-16 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+         </div>
+         <div class="text-3xl font-light text-slate-800" id="current-day">12</div>
+         <div class="text-sm font-bold text-slate-600 uppercase tracking-wide mt-1" id="current-month-year">Novembro, 2026</div>
+         <div class="text-xs text-slate-400 mt-1 mb-6">Ambiente de Operações</div>
+         <div class="space-y-3">
+            <button class="w-full py-2.5 bg-slate-900 border border-slate-900 rounded-lg text-xs font-bold text-white shadow-md hover:bg-slate-800 transition" onclick="abrirModal()">Adicionar Nova Leitura</button>
+            <button id="btn-sync-tuya" class="w-full py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition flex items-center justify-center gap-2" onclick="sincronizarTuya()">
+               <svg id="sync-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+               Sincronizar Tuya (Casa 2)
+            </button>
+         </div>
+      </div>
+
+      <!-- Activities / Alerts -->
+      <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-white">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Logs Recentes</h3>
+        </div>
+        <div class="divide-y divide-slate-50 bg-slate-50/20" id="activity-log">
+           <!-- Mock Logs as requested for SaaS feel -->
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                 ATUALIZAÇÃO DE SISTEMA
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Painel SaaS implementado com sucesso na base de produção.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Há 1 hora</div>
+           </div>
+           
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-green-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                 BANCO DE DADOS
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Views financeiras (vw_agua_rateio) foram inicializadas de forma segura.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Há 2 horas</div>
+           </div>
+           
+           <div class="p-5 hover:bg-white transition cursor-pointer">
+              <div class="flex items-center text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-2">
+                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                 AVISO
+              </div>
+              <div class="text-sm text-slate-700 font-medium leading-relaxed">Autenticação de usuários restritos está agendada para a próxima fase.</div>
+              <div class="text-xs text-slate-400 mt-2 font-medium">Pendente</div>
+           </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Modal de Inserção -->
+  <div id="modal-inserir" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <button onclick="fecharModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+      <h2 class="text-xl font-black text-slate-800 mb-6" id="modal-title">Nova Leitura</h2>
+      
+      <!-- Seção IA -->
+      <div id="ai-section" class="bg-indigo-50/70 p-5 rounded-xl border border-indigo-100 mb-6">
+         <div class="flex items-center space-x-2 mb-4">
+            <span class="text-xl">✨</span>
+            <h3 class="text-sm font-bold text-indigo-900 uppercase">Leitor Automático (OCR Gemini)</h3>
+         </div>
+         <p class="text-xs text-indigo-700/70 mb-4 font-medium">Selecione as fotos para a IA ler <b>(os 3 últimos números do Hidrômetro serão desconsiderados)</b>.</p>
+
+         <!-- Campos Água -->
+         <div id="ai-upload-agua" class="grid grid-cols-4 gap-3 hidden">
+             <div class="upload-card" id="card-ag-fat"><span>📄<br>Fatura</span><input type="file" id="up-ag-fatura" accept="image/*" onchange="tagFile('card-ag-fat')"></div>
+             <div class="upload-card" id="card-ag-h1"><span>💧<br>Hidro 1</span><input type="file" id="up-ag-h1" accept="image/*" onchange="tagFile('card-ag-h1')"></div>
+             <div class="upload-card" id="card-ag-h2"><span>💧<br>Hidro 2</span><input type="file" id="up-ag-h2" accept="image/*" onchange="tagFile('card-ag-h2')"></div>
+             <div class="upload-card" id="card-ag-h3"><span>💧<br>Hidro 3</span><input type="file" id="up-ag-h3" accept="image/*" onchange="tagFile('card-ag-h3')"></div>
+         </div>
+
+         <!-- Campos Energia -->
+         <div id="ai-upload-energia" class="grid grid-cols-2 gap-4 hidden">
+              <div class="upload-card" id="card-en-fat"><span>📄 Fatura Energia</span><input type="file" id="up-en-fatura" accept="image/*" onchange="tagFile('card-en-fat')"></div>
+              <div class="upload-card" id="card-en-int"><span>⚡ Relógio Interno</span><input type="file" id="up-en-interno" accept="image/*" onchange="tagFile('card-en-int')"></div>
+         </div>
+
+         <button type="button" id="btn-ai-process" onclick="processarImagens()" class="mt-4 w-full py-3 border border-indigo-200 bg-white text-indigo-700 rounded-lg text-xs font-bold uppercase transition hover:bg-indigo-50 shadow-sm flex justify-center items-center">
+            📸 Auto-Preencher com IA
+         </button>
+         <div id="ai-loading" class="hidden mt-3 text-xs text-indigo-600 font-bold text-center">A IA está lendo as fotos... Processando...</div>
+      </div>
+
+      <div class="flex items-center mb-6">
+        <div class="bg-slate-200 h-px flex-1"></div>
+        <span class="text-xs text-slate-400 font-bold px-4 uppercase tracking-widest">Ou Digite Manualmente</span>
+        <div class="bg-slate-200 h-px flex-1"></div>
+      </div>
+      
+      <form id="form-inserir" class="space-y-5">
+        <div>
+           <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Data da Leitura</label>
+           <input type="date" id="ins-data" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+        </div>
+        
+        <div id="fields-agua" class="space-y-5 hidden">
+           <div class="grid grid-cols-4 gap-3">
+              <div><label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">L. Cesan</label><input type="number" step="any" id="ins-ag-cesan" class="w-full border border-slate-200 rounded-lg p-2 text-center text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+              <div><label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">H1</label><input type="number" step="any" id="ins-ag-h1" class="w-full border border-slate-200 rounded-lg p-2 text-center text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+              <div><label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">H2</label><input type="number" step="any" id="ins-ag-h2" class="w-full border border-slate-200 rounded-lg p-2 text-center text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+              <div><label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">H3</label><input type="number" step="any" id="ins-ag-h3" class="w-full border border-slate-200 rounded-lg p-2 text-center text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+           </div>
+        </div>
+
+        <div id="fields-energia" class="space-y-5 hidden">
+           <div class="grid grid-cols-2 gap-4">
+              <div id="en-prev-wrap" class="hidden">
+                <label id="lbl-en-anterior" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Última L. Interna 1</label>
+                <input type="number" step="any" id="ins-en-interno-anterior" readonly class="w-full border border-slate-200 bg-slate-50 rounded-lg p-3 text-sm font-bold text-slate-500 outline-none cursor-not-allowed">
+              </div>
+              <div id="en-prev-2-wrap" class="hidden">
+                <label id="lbl-en-anterior-2" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Última L. Interna 2</label>
+                <input type="number" step="any" id="ins-en-interno-anterior-2" readonly class="w-full border border-slate-200 bg-slate-50 rounded-lg p-3 text-sm font-bold text-slate-500 outline-none cursor-not-allowed">
+              </div>
+           </div>
+           <div class="grid grid-cols-2 gap-4">
+              <div><label id="lbl-en-padrao" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">L. Padrão</label><input type="number" step="any" id="ins-en-padrao" class="w-full border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+              <div class="grid grid-cols-2 gap-2">
+                 <div>
+                   <div class="flex items-center gap-1 mb-2">
+                     <label id="lbl-en-interno" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">L. Interna 1</label>
+                     <button type="button" id="btn-refresh-tuya" onclick="refreshTuyaReading()" class="hidden text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-1.5 py-0.5 transition" title="Atualizar leitura Tuya">↻</button>
+                   </div>
+                   <input type="number" step="any" id="ins-en-interno" class="w-full border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-500">
+                   <span id="tuya-last-update" class="hidden text-[9px] text-emerald-600 font-bold mt-1 block"></span>
+                 </div>
+                 <div id="en-int-2-wrap" class="hidden"><label id="lbl-en-interno-2" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">L. Interna 2</label><input type="number" step="any" id="ins-en-interno-2" class="w-full border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-500"></div>
+              </div>
+           </div>
+           <div id="energia-preview-box" class="hidden bg-slate-50 rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
+             <div class="font-bold text-slate-800 mb-2">Prévia do Rateio</div>
+             <div id="energia-preview-content" class="space-y-1"></div>
+           </div>
+        </div>
+
+        <div>
+           <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Valor da Fatura (R$)</label>
+           <input type="number" step="any" id="ins-fatura" required class="w-full border border-slate-200 bg-slate-50 rounded-lg p-3 text-lg outline-none focus:bg-emerald-50 focus:border-emerald-500 transition font-black text-slate-800 text-center">
+        </div>
+
+        <button type="submit" class="w-full bg-blue-600 text-white font-bold text-xs uppercase tracking-widest py-4 rounded-lg hover:bg-blue-700 transition shadow-md">Salvar Registo Definitivo</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal WhatsApp -->
+  <div id="modal-whatsapp" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+      <h2 class="text-lg font-black text-slate-800 mb-2">Compartilhar Fatura</h2>
+      <p class="text-sm text-slate-500 mb-6 font-medium">Selecione para qual morador você deseja enviar as informações via WhatsApp:</p>
+      
+      <div id="wa-moradores-list" class="space-y-2 mb-4 max-h-60 overflow-y-auto">
+        <!-- Injetado via JS -->
+      </div>
+      
+      <button onclick="document.getElementById('modal-whatsapp').classList.add('hidden')" class="w-full px-4 py-3 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition mt-2">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="admin-painel.js?v=20260506-9"></script>
+  
+  <script>
+    // Configura o widget de data com a data atual
+    const today = new Date();
+    document.getElementById('current-day').textContent = today.getDate();
+    const strMonth = today.toLocaleString('pt-BR', { month: 'long' });
+    document.getElementById('current-month-year').textContent = strMonth + ', ' + today.getFullYear();
+  </script>
+</body>
+</html>
