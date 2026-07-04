@@ -70,7 +70,11 @@ function initApp() {
         document.getElementById('mob-btn-go-admin')?.classList.remove('hidden');
         const wrap = document.getElementById('meter-selector-wrap');
         if(wrap) {
-          wrap.classList.remove('hidden');
+          if (state.currentTab === 'energia') {
+            wrap.classList.remove('hidden');
+          } else {
+            wrap.classList.add('hidden');
+          }
           const sel = document.getElementById('meter-selector');
           if(sel) {
             sel.value = state.currentMeter || 'rua_inhambu';
@@ -450,6 +454,11 @@ document.getElementById('tab-agua').addEventListener('click', () => {
   document.getElementById('tab-energia').className = 'nav-item';
   document.getElementById('view-agua').classList.remove('hidden');
   document.getElementById('view-energia').classList.add('hidden');
+  
+  if (isAdmin) {
+    document.getElementById('meter-selector-wrap')?.classList.add('hidden');
+  }
+
   renderAgua();
   updateDashboard();
 });
@@ -461,6 +470,11 @@ document.getElementById('tab-energia').addEventListener('click', () => {
   document.getElementById('tab-agua').className = 'nav-item';
   document.getElementById('view-energia').classList.remove('hidden');
   document.getElementById('view-agua').classList.add('hidden');
+
+  if (isAdmin) {
+    document.getElementById('meter-selector-wrap')?.classList.remove('hidden');
+  }
+
   renderEnergia();
   updateDashboard();
 });

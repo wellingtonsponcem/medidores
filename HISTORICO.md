@@ -38,6 +38,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Criação do script de migração automatizada `migration.php` que recria a estrutura das tabelas/views e importa todos os registros do Supabase via cURL.
   - Implementação do endpoint centralizado de API em PHP `api.php` para tratamento seguro de requisições de CRUD.
   - Criação do wrapper JS transparente `local-db-client.js` no frontend para simular as APIs do Supabase Client direcionando as chamadas para a `api.php`.
+  - Remoção/ocultação do seletor de localidade da Avenida Brasil na aba de indicadores de água do Dashboard, visto que a Av. Brasil não possui medidor de água.
+
 
 
 
