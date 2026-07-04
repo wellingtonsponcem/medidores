@@ -646,16 +646,18 @@ window.shareWhatsApp = async function (id) {
 
   users.forEach(u => {
     if(u.perfil === 'admin') return;
-    let label = u.perfil.toUpperCase();
-    if (u.perfil === 'casa1') label = 'Casa 1 (Milena)';
-    if (u.perfil === 'casa2') label = 'Casa 2 (Mirian)';
-    if (u.perfil === 'casa3') label = 'Casa 3';
-    if (u.perfil === 'loja2') label = 'Loja 02';
+    const userName = u.nome.charAt(0).toUpperCase() + u.nome.slice(1);
+    let label = '';
+    if (u.perfil === 'casa1') label = `Casa 01 (${userName})`;
+    else if (u.perfil === 'casa2') label = `Casa 02 (${userName})`;
+    else if (u.perfil === 'casa3') label = `Casa 03 (${userName})`;
+    else if (u.perfil === 'loja2') label = `Loja 02 (${userName})`;
+    else label = `${u.perfil.toUpperCase()} (${userName})`;
 
     listDiv.innerHTML += `
       <button onclick="executeShareWhatsApp('${u.id}')" class="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition flex items-center justify-between">
         <div>
-          <div class="text-sm font-bold text-slate-800">${u.nome} (${label})</div>
+          <div class="text-sm font-bold text-slate-800">${label}</div>
           <div class="text-[10px] text-slate-500">${u.senha_alterada ? 'Senha Segura' : 'Pendente de Troca de Senha'}</div>
         </div>
         <span class="text-emerald-500">➤</span>
@@ -671,6 +673,20 @@ window.executeShareWhatsApp = async function (userId) {
   const row = isAgua ? state.agua.find(r => r.id === currentWaRowId) : state.energia.find(r => r.id === currentWaRowId);
   if (!row) return;
 
+  // Carregar todos os moradores do banco para mapear seus nomes reais nas mensagens
+  const { data: users, error: userError } = await supabaseClient.from('usuarios').select('*');
+  if (userError || !users) return alert("Erro ao carregar dados dos moradores.");
+
+  const userMap = {};
+  users.forEach(u => {
+    userMap[u.perfil] = u.nome.charAt(0).toUpperCase() + u.nome.slice(1);
+  });
+
+  const c1Name = userMap['casa1'] || 'Casa 1';
+  const c2Name = userMap['casa2'] || 'Casa 2';
+  const c3Name = userMap['casa3'] || 'Casa 3';
+  const l2Name = userMap['loja2'] || 'Loja 2';
+
   let text = '';
   
   if (userId === 'ALL') {
@@ -681,39 +697,40 @@ window.executeShareWhatsApp = async function (userId) {
       text += `Consumo total: ${Number(row.consumo_cesan).toFixed(2)} m3\n`;
       text += `Valor do m3: ${fmtMoney(vpm3)}\n\n`;
       
-      text += `Hidro 1 - Milena\n`;
+      text += `Hidro 1 - ${c1Name}\n`;
       text += `${Number(row.consumo_h1).toFixed(2)} m3 -> *${fmtMoney(row.valor_h1)}*\n\n`;
       
-      text += `Hidro 2 - Mirian\n`;
+      text += `Hidro 2 - ${c2Name}\n`;
       text += `${Number(row.consumo_h2).toFixed(2)} m3 -> *${fmtMoney(row.valor_h2)}*\n\n`;
       
-      text += `Hidro 3 - Maria das Gracas\n`;
+      text += `Hidro 3 - ${c3Name}\n`;
       text += `${Number(row.consumo_h3).toFixed(2)} m3 -> *${fmtMoney(row.valor_h3)}*\n\n`;
       
-      text += `Servico - Maria das Gracas\n`;
+      text += `Servico - ${c3Name}\n`;
       text += `${Number(row.consumo_servico).toFixed(2)} m3 -> *${fmtMoney(row.valor_servico)}*`;
       
     } else {
       const vkwh = row.valor_kwh || (row.valor_fatura_total / Math.max(1, row.consumo_total_edp));
-      const cfg = ENERGY_METER_CONFIG[row.local_medidor || 'rua_inhambu'] || ENERGY_METER_CONFIG.rua_inhambu;
       text += `*ENERGIA*\n`;
       text += `Consumo total: ${Number(row.consumo_total_edp).toFixed(2)} kWh\n`;
       text += `Valor do kWh: ${fmtMoney(vkwh)}\n\n`;
       
-      text += `Casa 3\n`;
+      text += `${c3Name}\n`;
       text += `${Number(row.consumo_casa_2).toFixed(2)} kWh -> *${fmtMoney(row.valor_casa_2)}*\n\n`;
       
-      text += `Loja 2\n`;
+      text += `${l2Name}\n`;
       text += `${Number(row.consumo_casa_1).toFixed(2)} kWh -> *${fmtMoney(row.valor_casa_1)}*`;
     }
     text += `\n\n*Acesse seu painel completo:* https://wedistinto.com/medidores/`;
   } else {
     // Para um morador específico
     document.getElementById('modal-whatsapp').classList.add('hidden');
-    const { data: user } = await supabaseClient.from('usuarios').select('*').eq('id', userId).single();
+    const user = users.find(u => u.id === userId);
     if(!user) return;
     
-    text = `Ola, *${user.nome}*!\nAqui esta o seu consumo do mes de *${fmtDateSecure(row.data_leitura).substring(3)}*:\n\n`;
+    const userName = user.nome.charAt(0).toUpperCase() + user.nome.slice(1);
+    
+    text = `Ola, *${userName}*!\nAqui esta o seu consumo do mes de *${fmtDateSecure(row.data_leitura).substring(3)}*:\n\n`;
     
     if (isAgua) {
       const vpm3 = row.valor_por_m3 || (row.valor_fatura_total / Math.max(1, row.consumo_cesan));
@@ -722,26 +739,23 @@ window.executeShareWhatsApp = async function (userId) {
       text += `Valor do m3: ${fmtMoney(vpm3)}\n\n`;
       
       if (user.perfil === 'casa1') {
-         text += `*Sua Unidade (Hidro 1) - Milena*\n`;
+         text += `*Sua Unidade (Hidro 1) - ${c1Name}*\n`;
          text += `${Number(row.consumo_h1).toFixed(2)} m3 -> *${fmtMoney(row.row_p_valor_h1 || row.valor_h1)}*\n`;
       } else if (user.perfil === 'casa2') {
-         text += `*Sua Unidade (Hidro 2) - Mirian*\n`;
+         text += `*Sua Unidade (Hidro 2) - ${c2Name}*\n`;
          text += `${Number(row.consumo_h2).toFixed(2)} m3 -> *${fmtMoney(row.row_p_valor_h2 || row.valor_h2)}*\n`;
       } else if (user.perfil === 'casa3') {
-         text += `*Sua Unidade (Hidro 3) - Casa 3*\n`;
+         text += `*Sua Unidade (Hidro 3) - ${c3Name}*\n`;
          text += `${Number(row.consumo_h3).toFixed(2)} m3 -> *${fmtMoney(row.row_p_valor_h3 || row.valor_h3)}*\n`;
       } else {
          text += `*Sua Unidade*\nNao foi possivel associar seu cadastro automaticamente.\n`;
       }
     } else if (user.perfil === 'loja2') {
-      const { data: allU } = await supabaseClient.from('usuarios').select('nome, perfil');
-      const c3 = allU.find(u => u.perfil === 'casa3');
-      const c3Name = c3 ? c3.nome : 'Casa 3';
       const vkwh = row.valor_fatura_total / Math.max(1, row.consumo_total_edp);
       const ref = fmtDateSecure(row.data_leitura).substring(3);
-
+ 
       text = `*Resumo da Divisao de Energia - Ref. ${ref}*\n\n`;
-      text += `Ola, *${user.nome}*! Segue o detalhamento da conta de energia deste mes para conferencia:\n\n`;
+      text += `Ola, *${userName}*! Segue o detalhamento da conta de energia deste mes para conferencia:\n\n`;
       text += `1. *Dados da Fatura (EDP):*\n\n`;
       text += `* Consumo Total: ${Number(row.consumo_total_edp).toFixed(2)} kWh\n`;
       text += `* Valor Total: ${fmtMoney(row.valor_fatura_total)}\n`;
@@ -752,7 +766,7 @@ window.executeShareWhatsApp = async function (userId) {
       text += `* Consumo: ${Number(row.consumo_casa_2).toFixed(2)} kWh\n`;
       text += `* Valor a pagar: ${fmtMoney(row.row_p_valor_casa_2 || row.valor_casa_2)}\n\n`;
       
-      text += `* ${user.nome}:\n`;
+      text += `* ${userName}:\n`;
       text += `* Consumo (Diferenca do total): ${Number(row.consumo_casa_1).toFixed(2)} kWh\n`;
       text += `* Valor a pagar: ${fmtMoney(row.valor_casa_1)}\n\n`;
       
@@ -766,10 +780,10 @@ window.executeShareWhatsApp = async function (userId) {
       text += `Valor do kWh: ${fmtMoney(vkwh)}\n\n`;
       
       if (user.perfil === 'casa1') {
-         text += `*Sua Unidade (Casa 1 - Milena)*\n`;
+         text += `*Sua Unidade (Casa 1 - ${c1Name})*\n`;
          text += `${Number(row.consumo_casa_1).toFixed(2)} kWh -> *${fmtMoney(row.valor_casa_1)}*\n`;
       } else if (user.perfil === 'casa2' || user.perfil === 'casa3') {
-         const label = user.perfil === 'casa3' ? 'Casa 3' : 'Casa 2 (Mirian)';
+         const label = user.perfil === 'casa3' ? `Casa 3 (${c3Name})` : `Casa 2 (${c2Name})`;
          text += `*Sua Unidade (${label})*\n`;
          text += `${Number(row.consumo_casa_2).toFixed(2)} kWh -> *${fmtMoney(row.row_p_valor_casa_2 || row.valor_casa_2)}*\n`;
       }

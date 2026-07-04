@@ -39,6 +39,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Implementação do endpoint centralizado de API em PHP `api.php` para tratamento seguro de requisições de CRUD.
   - Criação do wrapper JS transparente `local-db-client.js` no frontend para simular as APIs do Supabase Client direcionando as chamadas para a `api.php`.
   - Remoção/ocultação do seletor de localidade da Avenida Brasil na aba de indicadores de água do Dashboard, visto que a Av. Brasil não possui medidor de água.
+  - Refatoração completa das mensagens de WhatsApp e do modal de compartilhamento para buscar e exibir os nomes dos moradores dinamicamente do banco de dados (de acordo com o cadastro de cada perfil), removendo todos os nomes chumbados no código.
+
 
 
 
