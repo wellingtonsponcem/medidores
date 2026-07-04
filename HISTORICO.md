@@ -25,6 +25,11 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Aprimoramento da colagem com `window.focus()` e tratamento customizado de erros de clipboard vazio para evitar falsas exceções de permissão.
   - Implementação de compressão automática de imagens (JPEG 80%, max 1200px) no frontend, otimizando o envio e corrigindo erros de payload no processamento OCR.
   - Correção do erro HTTP 401 Unauthorized adicionando explicitamente os cabeçalhos de autorização anon nas chamadas da Edge Function do Supabase.
+- **2026-07-04**:
+  - Correção do acesso ao painel de admin no layout mobile, adicionando o botão de configurações no header mobile quando o usuário logado for admin.
+  - Correção de possíveis race conditions de carregamento de DOM no `app.js`, `dashboard.html` e `admin-painel.js` substituindo listeners puros de `DOMContentLoaded` por checagens dinâmicas de `document.readyState`.
+  - Adição de tratamento a valores nulos em `userAuth` para evitar quebras silenciosas na execução dos scripts globais.
+
 
 
 

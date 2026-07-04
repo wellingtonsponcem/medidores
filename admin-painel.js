@@ -1168,7 +1168,11 @@ async function initAdmin() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', initAdmin);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAdmin);
+} else {
+  initAdmin();
+}
 
 // =================== CLIPBOARD / PASTE SUPPORT ===================
 let activePasteCard = null;

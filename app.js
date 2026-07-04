@@ -6,12 +6,12 @@ const userAuth = JSON.parse(localStorage.getItem('userAuth') || 'null');
 if (!userAuth) {
   window.location.href = 'index.html';
 }
-const isCasa1 = userAuth.perfil === 'casa1';
-const isCasa2 = userAuth.perfil === 'casa2';
-const isCasa3 = userAuth.perfil === 'casa3';
-const isLoja2 = userAuth.perfil === 'loja2';
+const isCasa1 = userAuth?.perfil === 'casa1';
+const isCasa2 = userAuth?.perfil === 'casa2';
+const isCasa3 = userAuth?.perfil === 'casa3';
+const isLoja2 = userAuth?.perfil === 'loja2';
 const isResident = isCasa1 || isCasa2 || isCasa3 || isLoja2;
-const isAdmin = userAuth.perfil === 'admin';
+const isAdmin = userAuth?.perfil === 'admin';
 
 const METER_MAP = {
   'casa1': 'rua_inhambu',
@@ -19,9 +19,9 @@ const METER_MAP = {
   'loja2': 'av_brasil',
   'casa3': 'av_brasil'
 };
-const userMeter = METER_MAP[userAuth.perfil] || null;
+const userMeter = userAuth ? (METER_MAP[userAuth.perfil] || null) : null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
     if(userAuth) {
       const un = document.getElementById('top-user-name');
       if(un) un.textContent = `Olá, ${userAuth.nome}`;
@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if(isAdmin) {
         document.getElementById('btn-go-admin')?.classList.remove('hidden');
+        document.getElementById('mob-btn-go-admin')?.classList.remove('hidden');
         const wrap = document.getElementById('meter-selector-wrap');
         if(wrap) {
           wrap.classList.remove('hidden');
@@ -85,7 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
         abrirModalSenha(true);
       }
     }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 window.abrirModalSenha = function(isObrigatorio) {
   const modal = document.getElementById('modal-senha');

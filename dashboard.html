@@ -449,6 +449,10 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
+      <!-- Botão de acesso ao Painel Admin visível apenas para administradores -->
+      <a href="admin-painel.html" id="mob-btn-go-admin" class="hidden mobile-icon-button" style="cursor:pointer;color:#525e65;" title="Painel Admin">
+        <span class="material-symbols-outlined mobile-material" style="font-size:22px;">settings</span>
+      </a>
       <button class="mobile-icon-button" onclick="sessionStorage.removeItem('ignored_pwd'); localStorage.removeItem('userAuth'); localStorage.removeItem('admin_logged'); window.location.href='index.html';" style="cursor:pointer;color:#525e65;">
         <span class="material-symbols-outlined mobile-material" style="font-size:22px;">logout</span>
       </button>
@@ -871,8 +875,8 @@
     }
   }
 
-  // Wait for app.js to fully initialize, then hook in
-  document.addEventListener('DOMContentLoaded', () => {
+  // Wait for app.js to fully initialize, then hook in securely
+  function initMobileDashboard() {
     setupMobileHook();
 
     // Fallback: poll for data if hook didn't catch
@@ -886,15 +890,19 @@
         clearInterval(mobCheckInterval);
       }
     }, 300);
-  });
 
-  // Also watch for tab changes from desktop tabs affecting mobile
-  document.addEventListener('DOMContentLoaded', () => {
+    // Also watch for tab changes from desktop tabs affecting mobile
     const tabAgua = document.getElementById('tab-agua');
     const tabEnergia = document.getElementById('tab-energia');
     if (tabAgua) tabAgua.addEventListener('click', () => { if(window.innerWidth < 768) { mobCurrentTab = 'agua'; renderMobileDashboard(); }});
     if (tabEnergia) tabEnergia.addEventListener('click', () => { if(window.innerWidth < 768) { mobCurrentTab = 'energia'; renderMobileDashboard(); }});
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileDashboard);
+  } else {
+    initMobileDashboard();
+  }
 </script>
 </body>
 </html>
