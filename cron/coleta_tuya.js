@@ -96,23 +96,20 @@ async function getDeviceStatus(token) {
     return res.result;
 }
 
-async function saveToSupabase(valor) {
+async function saveToLocalDB(valor) {
     const body = JSON.stringify({
         valor_extraido: valor,
-        data_leitura: new Date().toISOString(),
+        data_leitura: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        data_execucao: new Date().toISOString().replace('T', ' ').substring(0, 19),
         medidor_id: CONFIG.deviceId
     });
 
-    const urlObj = new URL(CONFIG.supabaseUrl);
     const options = {
-        hostname: urlObj.hostname,
-        path: '/rest/v1/leitura_energia',
+        hostname: 'wedistinto.com',
+        path: '/medidores/api.php?table=leitura_energia',
         method: 'POST',
         headers: {
-            'apikey': CONFIG.supabaseKey,
-            'Authorization': `Bearer ${CONFIG.supabaseKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
+            'Content-Type': 'application/json'
         }
     };
 
@@ -147,8 +144,8 @@ async function main() {
 
         console.log(`3. Valor extraído: ${valorFinal} kWh`);
 
-        console.log('4. Salvando no Supabase...');
-        await saveToSupabase(valorFinal);
+        console.log('4. Salvando no Banco de Dados MySQL local...');
+        await saveToLocalDB(valorFinal);
 
         console.log('--- Sucesso! Dados salvos. ---');
     } catch (error) {

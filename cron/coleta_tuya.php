@@ -80,30 +80,25 @@ try {
     $totalEle = $valores['ele'] / 1000;
     echo "   Total Ele: $totalEle kWh\n";
 
-    echo "3. Salvando no Supabase...\n";
-    $body = json_encode([
-        'valor_extraido' => $totalEle,
-        'data_leitura' => date('c'),
-        'medidor_id' => $deviceId
+    echo "3. Salvando no Banco de Dados MySQL local...\n";
+    require_once __DIR__ . '/../db_config.php';
+    
+    $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+    $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
-
-    $urlObj = parse_url($supabaseUrl);
-    $ch = curl_init($supabaseUrl . '/rest/v1/leitura_energia');
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "apikey: $supabaseKey",
-        "Authorization: Bearer $supabaseKey",
-        "Content-Type: application/json",
-        "Prefer: return=minimal"
+    
+    $sql = "INSERT INTO leitura_energia (valor_extraido, data_leitura, data_execucao, medidor_id) 
+            VALUES (:valor_extraido, :data_leitura, :data_execucao, :medidor_id)";
+            
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':valor_extraido' => $totalEle,
+        ':data_leitura' => date('Y-m-d H:i:s'),
+        ':data_execucao' => date('Y-m-d H:i:s'),
+        ':medidor_id' => $deviceId
     ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-    $saveRes = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode >= 300)
-        throw new Exception("Falha ao salvar no Supabase (HTTP $httpCode): $saveRes");
 
     echo "--- Sucesso! $totalEle kWh salvo. ---\n";
 
