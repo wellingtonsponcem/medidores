@@ -29,6 +29,17 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Correção do acesso ao painel de admin no layout mobile, adicionando o botão de configurações no header mobile quando o usuário logado for admin.
   - Correção de possíveis race conditions de carregamento de DOM no `app.js`, `dashboard.html` e `admin-painel.js` substituindo listeners puros de `DOMContentLoaded` por checagens dinâmicas de `document.readyState`.
   - Adição de tratamento a valores nulos em `userAuth` para evitar quebras silenciosas na execução dos scripts globais.
+  - Atualização da senha do usuário `admin` no banco de dados para `'admin'`, facilitando o login real com dados completos.
+  - Implementação de normalização automática de input em `index.html` que corrige o erro de digitação comum `"admn"` para `"admin"` no campo de usuário.
+  - Aprimoramento do fallback de login legado no HTML para dar suporte a ambas as variações de escrita e senha (`admin`/`admn` e `admin`/`admin123`).
+  - Adição de botões para Logout (Sair) tanto no modo Desktop quanto no layout Mobile do Painel Administrativo (`admin-painel.html`), limpando as credenciais de sessão local.
+  - Migração de toda a arquitetura de banco de dados do Supabase (Cloud PostgreSQL) para o MySQL local da Hospedagem (Hostinger).
+  - Criação do arquivo de configurações de conexão `db_config.php`.
+  - Criação do script de migração automatizada `migration.php` que recria a estrutura das tabelas/views e importa todos os registros do Supabase via cURL.
+  - Implementação do endpoint centralizado de API em PHP `api.php` para tratamento seguro de requisições de CRUD.
+  - Criação do wrapper JS transparente `local-db-client.js` no frontend para simular as APIs do Supabase Client direcionando as chamadas para a `api.php`.
+
+
 
 
 

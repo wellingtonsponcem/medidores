@@ -6,7 +6,7 @@
   <title>Login — D-Meter</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="local-db-client.js"></script>
   
   <style>
     body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; }
@@ -102,7 +102,11 @@
     document.getElementById('form-login').addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const nome = document.getElementById('ipt-nome').value.trim();
+      let nome = document.getElementById('ipt-nome').value.trim();
+      // Normalização automática de erros de digitação comuns
+      if (nome.toLowerCase() === 'admn') {
+        nome = 'admin';
+      }
       const senha = document.getElementById('ipt-senha').value;
       const btn = document.getElementById('btn-submit');
       const err = document.getElementById('error-msg');
@@ -127,8 +131,9 @@
           if(user.perfil === 'admin') localStorage.setItem('admin_logged', 'true');
           window.location.href = 'dashboard.html';
         } else {
-          // Check hardcoded legacy
-          if (nome === 'admin' && senha === 'admin') {
+          // Check hardcoded legacy (tolerante a erros comuns de digitação como "admn")
+          const nomeLower = nome.toLowerCase().trim();
+          if ((nomeLower === 'admin' || nomeLower === 'admn') && (senha === 'admin' || senha === 'admin123')) {
              localStorage.setItem('userAuth', JSON.stringify({nome: 'admin', perfil: 'admin'}));
              localStorage.setItem('admin_logged', 'true');
              window.location.href = 'dashboard.html';
