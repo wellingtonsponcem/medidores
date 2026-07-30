@@ -30,8 +30,11 @@ try {
             senha VARCHAR(255) NOT NULL,
             perfil VARCHAR(50) NOT NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-            senha_alterada TINYINT(1) DEFAULT 0
+            senha_alterada TINYINT(1) DEFAULT 0,
+            ativo TINYINT(1) DEFAULT 1
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo TINYINT(1) DEFAULT 1;",
 
         "CREATE TABLE IF NOT EXISTS consumo_agua (
             id VARCHAR(50) PRIMARY KEY,

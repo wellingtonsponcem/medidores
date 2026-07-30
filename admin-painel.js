@@ -495,17 +495,21 @@ function renderUsuarios() {
   const tbody = document.getElementById('tbody-usuarios');
   tbody.innerHTML = '';
   if (state.usuarios.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-400 text-sm">Nenhum morador registrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-400 text-sm">Nenhum morador registrado.</td></tr>';
     return;
   }
   state.usuarios.forEach(user => {
+    const isAtivo = user.ativo !== 0;
     const tr = document.createElement('tr');
+    if (!isAtivo) tr.className = 'opacity-50';
     tr.innerHTML = `
-      <td class="font-bold text-slate-700 cursor-pointer text-blue-600 hover:underline" onclick="resetSenha('${user.id}')" title="Clique para redefinir a senha">${user.nome}</td>
+      <td class="font-bold text-slate-700 cursor-pointer text-blue-600 hover:underline ${!isAtivo ? 'line-through' : ''}" onclick="resetSenha('${user.id}')" title="Clique para redefinir a senha">${user.nome}</td>
       <td class="text-slate-500 font-mono text-xs cursor-help" title="A senha não é mostrada por segurança">••••••••</td>
       <td><span class="text-slate-600 bg-slate-100 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap uppercase">${user.perfil}</span></td>
-      <td class="text-right">
-         <button onclick="deletarUsuario('${user.id}')" class="btn-action btn-delete">Excluir</button>
+      <td><span class="inline-flex items-center gap-1 text-xs font-semibold ${isAtivo ? 'text-emerald-600' : 'text-red-400'}">${isAtivo ? '● Ativo' : '● Inativo'}</span></td>
+      <td class="text-right whitespace-nowrap">
+         <button onclick="toggleAtivoUsuario('${user.id}', ${isAtivo})" class="btn-action ${isAtivo ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'} mr-1 mb-1">${isAtivo ? 'Desativar' : 'Reativar'}</button>
+         <button onclick="deletarUsuario('${user.id}')" class="btn-action btn-delete mb-1">Excluir</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -582,6 +586,13 @@ window.deleteRow = async function (table, id) {
   }
 }
 
+window.toggleAtivoUsuario = async function(id, ativoAtual) {
+  const novoValor = ativoAtual ? 0 : 1;
+  const { error } = await supabaseClient.from('usuarios').update({ ativo: novoValor }).eq('id', id);
+  if (error) { displayAlert("Erro ao alterar status!"); return; }
+  await loadUsuarios();
+};
+
 window.deletarUsuario = async function(id) {
   if (!confirm("Remover este acesso permanentemente?")) return;
   const { error } = await supabaseClient.from('usuarios').delete().eq('id', id);
@@ -646,6 +657,7 @@ window.shareWhatsApp = async function (id) {
 
   users.forEach(u => {
     if(u.perfil === 'admin') return;
+    if (u.ativo === 0) return;
     const userName = u.nome.charAt(0).toUpperCase() + u.nome.slice(1);
     let label = '';
     if (u.perfil === 'casa1') label = `Casa 01 (${userName})`;
@@ -678,7 +690,7 @@ window.executeShareWhatsApp = async function (userId) {
   if (userError || !users) return alert("Erro ao carregar dados dos moradores.");
 
   const userMap = {};
-  users.forEach(u => {
+  users.filter(u => u.ativo !== 0).forEach(u => {
     userMap[u.perfil] = u.nome.charAt(0).toUpperCase() + u.nome.slice(1);
   });
 

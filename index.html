@@ -120,7 +120,8 @@
           .from('usuarios')
           .select('*')
           .eq('nome', nome)
-          .eq('senha', senha);
+          .eq('senha', senha)
+          .eq('ativo', 1);
 
         if (error) throw error;
 

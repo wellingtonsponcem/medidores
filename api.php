@@ -129,6 +129,9 @@ switch ($method) {
                     if (isset($r['senha_alterada'])) {
                         $r['senha_alterada'] = $r['senha_alterada'] == 1;
                     }
+                    if (isset($r['ativo'])) {
+                        $r['ativo'] = $r['ativo'] == 1;
+                    }
                 }
             }
 
