@@ -41,6 +41,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Remoção/ocultação do seletor de localidade da Avenida Brasil na aba de indicadores de água do Dashboard, visto que a Av. Brasil não possui medidor de água.
   - Refatoração completa das mensagens de WhatsApp e do modal de compartilhamento para buscar e exibir os nomes dos moradores dinamicamente do banco de dados (de acordo com o cadastro de cada perfil), removendo todos os nomes chumbados no código.
   - Alteração dos scripts de cron/coleta Tuya (`coleta_tuya.php` e `coleta_tuya.js`) para salvar as medições no banco de dados MySQL local da hospedagem em vez do Supabase.
+- **2026-08-11**:
+  - Execução da atualização de esquema no banco MySQL remoto da hospedagem (`u306254544_medidores`), garantindo a criação da coluna `ativo TINYINT(1) DEFAULT 1` na tabela `usuarios` para resolver o erro SQL 1054 no login.
 
 
 
