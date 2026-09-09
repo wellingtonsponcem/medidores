@@ -80,7 +80,7 @@ try {
     $totalEle = $valores['ele'] / 1000;
     echo "   Total Ele: $totalEle kWh\n";
 
-    echo "3. Salvando no Banco de Dados MySQL local...\n";
+    echo "3. Salvando no Banco de Dados MySQL local (idempotente 1x/dia 14h)...\n";
     require_once __DIR__ . '/../db_config.php';
     
     $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
@@ -89,18 +89,35 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
     
-    $sql = "INSERT INTO leitura_energia (valor_extraido, data_leitura, data_execucao, medidor_id) 
-            VALUES (:valor_extraido, :data_leitura, :data_execucao, :medidor_id)";
-            
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':valor_extraido' => $totalEle,
-        ':data_leitura' => date('Y-m-d H:i:s'),
-        ':data_execucao' => date('Y-m-d H:i:s'),
-        ':medidor_id' => $deviceId
-    ]);
+    // Garante índice para busca por dia
+    try { $pdo->exec("CREATE INDEX IF NOT EXISTS idx_leitura_data ON leitura_energia (data_leitura)"); } catch(Exception $e) {}
 
-    echo "--- Sucesso! $totalEle kWh salvo. ---\n";
+    $today = date('Y-m-d');
+    $chk = $pdo->prepare("SELECT id, valor_extraido FROM leitura_energia WHERE DATE(data_leitura) = :d ORDER BY data_leitura DESC LIMIT 1");
+    $chk->execute([':d' => $today]);
+    $existing = $chk->fetch();
+
+    if ($existing) {
+        $upd = $pdo->prepare("UPDATE leitura_energia SET valor_extraido = :v, data_leitura = :dl, data_execucao = :de WHERE id = :id");
+        $upd->execute([
+            ':v' => $totalEle,
+            ':dl' => date('Y-m-d H:i:s'),
+            ':de' => date('Y-m-d H:i:s'),
+            ':id' => $existing['id']
+        ]);
+        echo "--- Atualizado (já existia hoje id={$existing['id']}) $totalEle kWh. ---\n";
+    } else {
+        $sql = "INSERT INTO leitura_energia (valor_extraido, data_leitura, data_execucao, medidor_id) 
+                VALUES (:valor_extraido, :data_leitura, :data_execucao, :medidor_id)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':valor_extraido' => $totalEle,
+            ':data_leitura' => date('Y-m-d H:i:s'),
+            ':data_execucao' => date('Y-m-d H:i:s'),
+            ':medidor_id' => $deviceId
+        ]);
+        echo "--- Sucesso! $totalEle kWh salvo. ---\n";
+    }
 
 } catch (Exception $e) {
     echo "ERRO: " . $e->getMessage();

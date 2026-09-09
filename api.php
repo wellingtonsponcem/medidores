@@ -23,6 +23,76 @@ try {
 
 $action = $_GET['action'] ?? null;
 
+// Snapshot Tuya por data da fatura — Av Brasil (sincronia diária 14h)
+if ($action === 'get_tuya_by_date') {
+    $date = $_GET['date'] ?? null; // esperado YYYY-MM-DD
+    $medidorId = $_GET['medidor_id'] ?? null;
+    if (!$date || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        echo json_encode(["error" => "Parâmetro 'date' obrigatório no formato YYYY-MM-DD"]);
+        exit;
+    }
+    try {
+        // 1) tenta exato no dia (mais recente do dia, ideal 14h)
+        $sql = "SELECT valor_extraido, data_leitura, medidor_id FROM leitura_energia WHERE DATE(data_leitura) = :d";
+        $params = [":d" => $date];
+        if ($medidorId) { $sql .= " AND medidor_id = :m"; $params[":m"] = $medidorId; }
+        $sql .= " ORDER BY data_leitura DESC LIMIT 1";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        if ($row) {
+            echo json_encode(["data" => ["valor" => (float)$row['valor_extraido'], "data_real" => $row['data_leitura'], "medidor_id" => $row['medidor_id'], "estimado" => false, "delta_dias" => 0, "interpolado" => false], "error" => null]);
+            exit;
+        }
+        // 2) fallback: anterior e posterior mais próximos (até 7 dias)
+        $sqlPrev = "SELECT valor_extraido, data_leitura FROM leitura_energia WHERE DATE(data_leitura) < :d";
+        $pPrev = [":d" => $date];
+        if ($medidorId) { $sqlPrev .= " AND medidor_id = :m"; $pPrev[":m"] = $medidorId; }
+        $sqlPrev .= " ORDER BY data_leitura DESC LIMIT 1";
+        $stmt = $pdo->prepare($sqlPrev);
+        $stmt->execute($pPrev);
+        $prev = $stmt->fetch();
+
+        $sqlNext = "SELECT valor_extraido, data_leitura FROM leitura_energia WHERE DATE(data_leitura) > :d";
+        $pNext = [":d" => $date];
+        if ($medidorId) { $sqlNext .= " AND medidor_id = :m"; $pNext[":m"] = $medidorId; }
+        $sqlNext .= " ORDER BY data_leitura ASC LIMIT 1";
+        $stmt = $pdo->prepare($sqlNext);
+        $stmt->execute($pNext);
+        $next = $stmt->fetch();
+
+        if ($prev && $next) {
+            $dPrev = new DateTime($prev['data_leitura']);
+            $dNext = new DateTime($next['data_leitura']);
+            $dTarget = new DateTime($date . " 14:00:00");
+            $span = $dNext->getTimestamp() - $dPrev->getTimestamp();
+            $off  = $dTarget->getTimestamp() - $dPrev->getTimestamp();
+            if ($span > 0 && $span < 14*86400) {
+                $ratio = max(0, min(1, $off / $span));
+                $interp = (float)$prev['valor_extraido'] + $ratio * ((float)$next['valor_extraido'] - (float)$prev['valor_extraido']);
+                $delta = (int) round(abs($dTarget->getTimestamp() - $dPrev->getTimestamp())/86400);
+                echo json_encode(["data" => ["valor" => round($interp,3), "data_real" => $prev['data_leitura'], "data_real_next" => $next['data_leitura'], "estimado" => true, "interpolado" => true, "delta_dias" => $delta], "error" => null]);
+                exit;
+            }
+        }
+        // 3) usa o mais próximo isolado
+        $closest = $prev ?: $next;
+        if ($closest) {
+            $dClosest = new DateTime($closest['data_leitura']);
+            $dTarget = new DateTime($date);
+            $delta = (int) $dClosest->diff($dTarget)->days;
+            if ($delta <= 7) {
+                echo json_encode(["data" => ["valor" => (float)$closest['valor_extraido'], "data_real" => $closest['data_leitura'], "estimado" => true, "interpolado" => false, "delta_dias" => $delta], "error" => null]);
+                exit;
+            }
+        }
+        echo json_encode(["data" => null, "error" => "Nenhum snapshot Tuya encontrado próximo a $date (até 7 dias)"]);
+    } catch (Exception $e) {
+        echo json_encode(["error" => "Erro get_tuya_by_date: " . $e->getMessage()]);
+    }
+    exit;
+}
+
 // Proxy para Edge Functions do Supabase (ex: ocr-gemini)
 if ($action === 'invoke_function') {
     $fnName = $_GET['name'] ?? '';

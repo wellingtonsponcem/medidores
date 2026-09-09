@@ -859,7 +859,8 @@ window.abrirModal = function() {
     refreshEnergiaPreview();
 
     if (cfg.key === 'av_brasil') {
-      preencherCasa3Tuya();
+      _tuyaManualOverride = false;
+      preencherCasa3Tuya(document.getElementById('ins-data').value);
     }
   }
 }
@@ -1124,9 +1125,15 @@ async function initAdmin() {
     }
   });
   document.getElementById('ins-en-padrao')?.addEventListener('input', refreshEnergiaPreview);
-  document.getElementById('ins-en-interno')?.addEventListener('input', refreshEnergiaPreview);
+  document.getElementById('ins-en-interno')?.addEventListener('input', () => { _tuyaManualOverride = true; _fmtSnapshotBadge(_tuyaSnapshotMeta, document.getElementById('ins-en-interno').value); refreshEnergiaPreview(); });
   document.getElementById('ins-en-interno-anterior')?.addEventListener('input', refreshEnergiaPreview);
   document.getElementById('ins-fatura')?.addEventListener('input', refreshEnergiaPreview);
+  document.getElementById('ins-data')?.addEventListener('change', (e) => {
+    if (state.currentTab === 'energia' && state.energyMeter === 'av_brasil' && !document.getElementById('modal-inserir').classList.contains('hidden')) {
+      _tuyaManualOverride = false;
+      preencherCasa3Tuya(e.target.value);
+    }
+  });
   
   const formUsr = document.getElementById('form-usuario');
   if(formUsr) {
@@ -1174,13 +1181,15 @@ async function initAdmin() {
         const cfg = getEnergyConfig();
         const { totalConsumo, leituraAtual, leituraAnterior, valorFatura, valorKwh, consumoInterno, consumoExterno } = getEnergyInsertPayload();
 
+        // Loja2 opcional: se vazio envia null (residual) — admin-painel.html:413 já mostra ajuda
+        const _v2 = document.getElementById('ins-en-interno-2').value;
         const payload = {
           id: createRowId(),
           data_leitura: dateStr,
           valor_fatura_total: fatura || 0,
           leitura_padrao: document.getElementById('ins-en-padrao').value || 0,
           leitura_interno: document.getElementById('ins-en-interno').value || 0,
-          leitura_interno_2: document.getElementById('ins-en-interno-2').value || null,
+          leitura_interno_2: _v2 !== '' ? _v2 : null,
           local_medidor: state.energyMeter,
           leitura_interno_anterior_ref: state.energyMeter === 'av_brasil' ? (document.getElementById('ins-en-interno-anterior').value || 0) : null,
           leitura_interno_2_anterior_ref: state.energyMeter === 'av_brasil' ? (document.getElementById('ins-en-interno-anterior-2').value || 0) : null
@@ -1354,7 +1363,10 @@ async function sincronizarTuya() {
 
 window.sincronizarTuya = sincronizarTuya;
 
-// =================== TUYA AUTO-FILL (Casa 3 Whatímetro) ===================
+// =================== TUYA AUTO-FILL (Casa 3 Whatímetro) — Sincronia por data da fatura ===================
+let _tuyaSnapshotMeta = null;
+let _tuyaManualOverride = false;
+
 async function fetchLatestTuyaReading() {
   const { data, error } = await supabaseClient
     .from('leitura_energia')
@@ -1365,38 +1377,72 @@ async function fetchLatestTuyaReading() {
   return data[0];
 }
 
-async function preencherCasa3Tuya() {
+async function fetchTuyaForDate(dateStr) {
+  // dateStr = YYYY-MM-DD — busca via api.php?action=get_tuya_by_date
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  try {
+    const res = await fetch('api.php?action=get_tuya_by_date&date=' + encodeURIComponent(dateStr));
+    const json = await res.json();
+    if (json.error) return null;
+    return json.data; // {valor, data_real, estimado, delta_dias, interpolado}
+  } catch(e) { return null; }
+}
+
+function _fmtSnapshotBadge(snapshot, inputVal) {
+  const badge = document.getElementById('tuya-last-update');
+  if (!badge) return;
+  if (!snapshot) {
+    badge.textContent = 'Sem snapshot Tuya para esta data — digite manualmente';
+    badge.className = 'text-[9px] text-amber-600 font-bold mt-1 block';
+    badge.classList.remove('hidden');
+    return;
+  }
+  const d = new Date(snapshot.data_real);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const isEdited = _tuyaManualOverride && String(inputVal) !== String(snapshot.valor);
+  if (isEdited) {
+    badge.textContent = `Editado manualmente (snapshot era ${snapshot.valor} kWh em ${dd}/${mm})`;
+    badge.className = 'text-[9px] text-amber-600 font-bold mt-1 block';
+  } else if (snapshot.estimado) {
+    const tag = snapshot.interpolado ? 'interpolado' : 'mais próximo';
+    badge.textContent = `Tuya ${tag}: ${snapshot.valor} kWh (ref ${dd}/${mm}, há ${snapshot.delta_dias}d) — travado-editável`;
+    badge.className = 'text-[9px] text-amber-600 font-bold mt-1 block';
+  } else {
+    badge.textContent = `Tuya snapshot: ${snapshot.valor} kWh (${dd}/${mm} 14h) — travado-editável, pode editar`;
+    badge.className = 'text-[9px] text-emerald-600 font-bold mt-1 block';
+  }
+  badge.classList.remove('hidden');
+}
+
+async function preencherCasa3Tuya(dateOverride) {
   const btnRefresh = document.getElementById('btn-refresh-tuya');
   if (state.energyMeter !== 'av_brasil') {
     if (btnRefresh) btnRefresh.classList.add('hidden');
     return;
   }
   if (btnRefresh) btnRefresh.classList.remove('hidden');
-  const reading = await fetchLatestTuyaReading();
-  if (!reading) return;
-
   const input = document.getElementById('ins-en-interno');
-  if (input) input.value = reading.valor_extraido;
-
-  const badge = document.getElementById('tuya-last-update');
-  if (badge) {
-    const d = new Date(reading.data_leitura);
-    const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
-    let agoText;
-    if (diffMin < 1) agoText = 'agora';
-    else if (diffMin < 60) agoText = `há ${diffMin}min`;
-    else if (diffMin < 1440) agoText = `há ${Math.round(diffMin / 60)}h`;
-    else agoText = `há ${Math.round(diffMin / 1440)}d`;
-    badge.textContent = `Tuya: ${reading.valor_extraido} kWh (${agoText})`;
-    badge.classList.remove('hidden');
+  const dateVal = dateOverride || document.getElementById('ins-data')?.value || new Date().toISOString().slice(0,10);
+  let snapshot = await fetchTuyaForDate(dateVal);
+  if (!snapshot) {
+    // fallback para último geral se não houver nada próximo (primeiras datas)
+    const latest = await fetchLatestTuyaReading();
+    if (latest) snapshot = { valor: Number(latest.valor_extraido), data_real: latest.data_leitura, estimado: true, delta_dias: 99, interpolado: false };
   }
+  if (!snapshot) return;
 
+  _tuyaSnapshotMeta = snapshot;
+  if (input && !_tuyaManualOverride) input.value = snapshot.valor;
+
+  _fmtSnapshotBadge(_tuyaSnapshotMeta, input?.value);
   refreshEnergiaPreview();
 }
 
 window.refreshTuyaReading = async function() {
   const btn = document.getElementById('btn-refresh-tuya');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  _tuyaManualOverride = false;
   await preencherCasa3Tuya();
   if (btn) { btn.disabled = false; btn.textContent = '↻'; }
 }
