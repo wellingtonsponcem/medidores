@@ -828,6 +828,7 @@ window.abrirModal = function() {
     document.getElementById('ins-ag-h1').value = '';
     document.getElementById('ins-ag-h2').value = '';
     document.getElementById('ins-ag-h3').value = '';
+    refreshAguaPreview();
   } else {
     const cfg = getEnergyConfig();
     const latestRow = getVisibleEnergiaRows()[0];
@@ -931,17 +932,18 @@ window.processarImagens = async function() {
     if (state.currentTab === 'agua') {
       prompt_text = `Você é um especialista em OCR e extração de dados estruturados. Sua tarefa é processar imagens de faturas de água (CESAN) e fotos de hidrômetros para fins de gestão financeira.
 
-### REGRAS DE EXTRAÇÃO:
+### REGRAS RIGOROSAS DE EXTRAÇÃO:
 
 1. **Fatura CESAN:**
-   - Localize o valor no campo "TOTAL A PAGAR" (ex: R$ 539,02).
-   - Localize o número no campo "LEITURA ATUAL" dentro da seção de informações de leitura (ex: 1587).
+   - **Valor Total:** Localize o valor no campo "TOTAL A PAGAR" ou "VALOR DA FATURA" (ex: 560.18). Salve em 'valor_total'.
+   - **Leitura Atual (Mês Vigente):** Localize a **LEITURA ATUAL** no quadro de dados da fatura. É SEMPRE o número MAIOR da leitura do mês vigente (ex: 1806). Salve em 'leitura_atual'.
+   - **Leitura Anterior (Mês Passado):** Localize a **LEITURA ANTERIOR** no quadro de dados da fatura. É o número MENOR (ex: 1772). Salve em 'leitura_anterior'.
+   - **Data da Leitura / Apresentação:** Localize a data da leitura atual ou emissão da fatura (formatada como 'AAAA-MM-DD', ex: '2026-10-04'). Salve em 'data_leitura'.
 
-2. **Hidrômetros (Fotos):**
-   - Identifique apenas os dígitos nos roletes de cor **preta**. Ignore completamente os dígitos vermelhos.
-   - **Lógica de Formatação (Dígito Inicial):** - Analise o primeiro dígito da sequência preta identificada.
-     - SE o primeiro dígito for igual a "0": Remova-o e retorne apenas os números restantes (exemplo: "0365" deve ser retornado como "365").
-     - SE o primeiro dígito for maior que "0": Retorne o número completo (exemplo: "1365" deve ser retornado como "1365").
+2. **Hidrômetros (Fotos dos Medidores Individuais):**
+   - Identifique APENAS os dígitos nos roletes de cor **PRETA**. Ignore totalmente os dígitos vermelhos/decimais.
+   - **Remoção de Zeros Iniciais:** Se a sequência de roletes pretos for '0490', retorne '490'. Se for '0189', retorne '189'. Se for '0284', retorne '284'.
+   - **NÃO INCLUA DÍGITOS VERMELHOS:** Os valores dos hidrômetros residenciais possuem de 3 a 4 dígitos inteiros no total. NUNCA adicione um dígito extra vindo de rolete vermelho (ex: NUNCA retorne '4910' se os pretos forem '0490' nem '1189' se forem '0189').
 
 ### INFORMAÇÃO DOS ARQUIVOS:
 Você receberá as imagens na seguinte ordem exata:`;
@@ -980,13 +982,15 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
 
 {
   "fatura": {
-    "valor_total": 539.02,
-    "leitura_fatura": 1587
+    "valor_total": 560.18,
+    "leitura_atual": 1806,
+    "leitura_anterior": 1772,
+    "data_leitura": "2026-10-04"
   },
   "medidores_individuais": [
     {
       "identificador": "h1",
-      "leitura_processada": "154"
+      "leitura_processada": "490"
     }
   ]
 }
@@ -1065,16 +1069,97 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
 
     // Auto-Preenchimento
     if (state.currentTab === 'agua') {
+      const prevRow = state.agua && state.agua.length > 0 ? state.agua[0] : null;
+
       if(obj.fatura) {
         if(obj.fatura.valor_total) document.getElementById('ins-fatura').value = obj.fatura.valor_total;
-        if(obj.fatura.leitura_fatura) document.getElementById('ins-ag-cesan').value = obj.fatura.leitura_fatura;
+        
+        // Auto-preenche a Data da Leitura se extraída da fatura
+        if(obj.fatura.data_leitura) {
+          const rawDate = String(obj.fatura.data_leitura).trim();
+          const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          const brMatch = rawDate.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+          if (isoMatch) {
+            document.getElementById('ins-data').value = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+          } else if (brMatch) {
+            document.getElementById('ins-data').value = `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+          }
+        }
+
+        // Leitura Atual vs Leitura Anterior da Fatura
+        let cesanAtual = obj.fatura.leitura_atual || obj.fatura.leitura_fatura;
+        let cesanAnterior = obj.fatura.leitura_anterior;
+
+        // Validação e Comparação com o Registro do Mês Passado no Banco
+        if (prevRow && prevRow.leitura_cesan) {
+          const dbPrevCesan = Number(prevRow.leitura_cesan);
+
+          // Se a IA enviou a Leitura Anterior como se fosse Atual, tenta trocar
+          if (cesanAtual && Number(cesanAtual) <= dbPrevCesan && cesanAnterior && Number(cesanAnterior) > dbPrevCesan) {
+            cesanAtual = cesanAnterior;
+          }
+
+          // Se a fatura trouxe a Leitura Anterior, compara para confirmar continuidade
+          if (cesanAnterior && Number(cesanAnterior) === dbPrevCesan) {
+            console.log(`[OCR Continuity Check OK] Leitura anterior da fatura (${cesanAnterior}) BATE com o banco (${dbPrevCesan})!`);
+          } else if (cesanAnterior) {
+            console.warn(`[OCR Warning] Leitura anterior da fatura (${cesanAnterior}) difere do banco (${dbPrevCesan}).`);
+          }
+        }
+
+        if (cesanAtual) {
+          document.getElementById('ins-ag-cesan').value = cesanAtual;
+        }
       }
+
+      function sanitizeHidro(rawStr, prevNum) {
+        if (rawStr === null || rawStr === undefined) return '';
+        let s = String(rawStr).trim().replace(/\D/g, '');
+        if (!s) return '';
+        
+        // Remove zeros à esquerda (ex: "0490" -> "490")
+        if (s.length > 1 && s.startsWith('0')) {
+          s = s.replace(/^0+/, '');
+        }
+
+        let val = Number(s);
+        if (isNaN(val)) return rawStr;
+
+        if (prevNum && prevNum > 0) {
+          // Caso a IA inclua um dígito vermelho extra no final (ex: "4910" -> "490" quando anterior era 471)
+          if (val - prevNum > 200 && s.length >= 4) {
+            let lastCut = Number(s.slice(0, -1));
+            if (lastCut >= prevNum && (lastCut - prevNum) < 150) {
+              return String(lastCut);
+            }
+          }
+          // Caso a IA duplique o primeiro dígito ou pegue lixo no início (ex: "1189" -> "189" quando anterior era 183)
+          if (val - prevNum > 200 && s.length >= 4) {
+            let firstCut = Number(s.slice(1));
+            if (firstCut >= prevNum && (firstCut - prevNum) < 150) {
+              return String(firstCut);
+            }
+          }
+        }
+        return String(val);
+      }
+
       if(obj.medidores_individuais) {
         for (const medidor of obj.medidores_individuais) {
-          if(medidor.identificador === 'h1' && medidor.leitura_processada) document.getElementById('ins-ag-h1').value = medidor.leitura_processada;
-          if(medidor.identificador === 'h2' && medidor.leitura_processada) document.getElementById('ins-ag-h2').value = medidor.leitura_processada;
-          if(medidor.identificador === 'h3' && medidor.leitura_processada) document.getElementById('ins-ag-h3').value = medidor.leitura_processada;
+          if(medidor.identificador === 'h1' && medidor.leitura_processada) {
+            const prevH1 = prevRow ? Number(prevRow.leitura_h1) : null;
+            document.getElementById('ins-ag-h1').value = sanitizeHidro(medidor.leitura_processada, prevH1);
+          }
+          if(medidor.identificador === 'h2' && medidor.leitura_processada) {
+            const prevH2 = prevRow ? Number(prevRow.leitura_h2) : null;
+            document.getElementById('ins-ag-h2').value = sanitizeHidro(medidor.leitura_processada, prevH2);
+          }
+          if(medidor.identificador === 'h3' && medidor.leitura_processada) {
+            const prevH3 = prevRow ? Number(prevRow.leitura_h3) : null;
+            document.getElementById('ins-ag-h3').value = sanitizeHidro(medidor.leitura_processada, prevH3);
+          }
         }
+        refreshAguaPreview();
       }
     } else {
       if(obj.faturaTotal) document.getElementById('ins-fatura').value = obj.faturaTotal;
@@ -1085,12 +1170,137 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
 
   } catch(e) {
     console.error(e);
-    alert("Falha na automação Gemini OCR. Verifique as fotos enviadas.");
+    const errText = e.message || "";
+    
+    let serverHasKey = false;
+    try {
+      const statusRes = await fetch(getApiUrl({ action: 'get_gemini_key_status' }));
+      const statusJson = await statusRes.json();
+      serverHasKey = !!statusJson?.data?.has_key;
+    } catch(err) {}
+
+    const isMissingKey = !serverHasKey && (
+      errText.includes("Nenhuma chave ativa") ||
+      errText.includes("API_KEY_INVALID") ||
+      errText.includes("API key not valid") ||
+      errText.includes("Chave não cadastrada")
+    );
+
+    if (isMissingKey) {
+      if (confirm("Para usar a leitura automática por foto (IA), é necessário ter uma chave ativa da API do Google Gemini.\n\nDeseja cadastrar sua chave gratuita do Gemini agora?")) {
+        const salvou = await window.salvarChaveGemini();
+        if (salvou) {
+          processarImagens();
+          return;
+        }
+      } else {
+        alert("Você pode continuar digitando os números manualmente nos campos abaixo.");
+      }
+    } else {
+      alert("Aviso no Processamento da IA: " + errText);
+    }
   } finally {
     btn.classList.remove('hidden');
     loader.classList.add('hidden');
   }
 }
+
+window.salvarChaveGemini = async function() {
+  const currentKey = prompt("Cole sua chave gratuita da API do Google Gemini (obtenha em aistudio.google.com/app/apikey):");
+  if (!currentKey || !currentKey.trim()) return false;
+
+  try {
+    const res = await fetch(getApiUrl({ action: 'set_gemini_key' }), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: currentKey.trim() })
+    });
+    const json = await res.json();
+    if (json.error) {
+      alert("Erro ao salvar chave: " + json.error);
+      return false;
+    }
+    alert("✅ Chave da API do Google Gemini salva com sucesso!");
+    return true;
+  } catch(e) {
+    alert("Erro ao salvar chave no servidor: " + e.message);
+    return false;
+  }
+};
+
+window.refreshAguaPreview = function() {
+  const box = document.getElementById('agua-preview-box');
+  const content = document.getElementById('agua-preview-content');
+  const vpm3Span = document.getElementById('agua-preview-vpm3');
+  if (!box || !content) return;
+
+  if (state.currentTab !== 'agua') {
+    box.classList.add('hidden');
+    return;
+  }
+
+  const curCesan = Number(document.getElementById('ins-ag-cesan')?.value || 0);
+  const curH1 = Number(document.getElementById('ins-ag-h1')?.value || 0);
+  const curH2 = Number(document.getElementById('ins-ag-h2')?.value || 0);
+  const curH3 = Number(document.getElementById('ins-ag-h3')?.value || 0);
+  const valorFatura = Number(document.getElementById('ins-fatura')?.value || 0);
+
+  const prevRow = state.agua && state.agua.length > 0 ? state.agua[0] : null;
+  if (!prevRow || curCesan === 0) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  const prevCesan = Number(prevRow.leitura_cesan || 0);
+  const prevH1 = Number(prevRow.leitura_h1 || 0);
+  const prevH2 = Number(prevRow.leitura_h2 || 0);
+  const prevH3 = Number(prevRow.leitura_h3 || 0);
+
+  const consumoCesan = Math.max(0, curCesan - prevCesan);
+  const brutoH1 = Math.max(0, curH1 - prevH1);
+  const brutoH2 = Math.max(0, curH2 - prevH2);
+  const brutoH3 = Math.max(0, curH3 - prevH3);
+
+  const consumoH1 = Math.max(0, brutoH1 - brutoH2);
+  const consumoH2 = brutoH2;
+  const consumoH3 = brutoH3;
+
+  const consumoMedidores = consumoH1 + consumoH2 + consumoH3;
+  const consumoServico = Math.max(0, consumoCesan - consumoMedidores);
+
+  const vpm3 = consumoCesan > 0 ? valorFatura / consumoCesan : 0;
+  const valorH1 = consumoH1 * vpm3;
+  const valorH2 = consumoH2 * vpm3;
+  const valorH3 = consumoH3 * vpm3;
+  const valorServico = consumoServico * vpm3;
+
+  if (vpm3Span) vpm3Span.textContent = vpm3 > 0 ? `Tarifa: ${fmtMoney(vpm3)} / m³` : '';
+
+  content.innerHTML = `
+    <div class="flex justify-between border-b border-emerald-200/60 pb-1.5 mb-1.5 font-bold text-slate-800">
+      <span>Consumo Total Cesan: <b>${consumoCesan.toFixed(1)} m³</b></span>
+      <span>Fatura Total: <b>${fmtMoney(valorFatura)}</b></span>
+    </div>
+    <div class="flex justify-between text-slate-700">
+      <span>Casa 1 (H1 − H2: ${consumoH1.toFixed(1)} m³):</span>
+      <span class="font-bold text-slate-900">${fmtMoney(valorH1)}</span>
+    </div>
+    <div class="flex justify-between text-slate-700">
+      <span>Casa 2 (H2: ${consumoH2.toFixed(1)} m³):</span>
+      <span class="font-bold text-slate-900">${fmtMoney(valorH2)}</span>
+    </div>
+    <div class="flex justify-between text-slate-700">
+      <span>Casa 3 (H3: ${consumoH3.toFixed(1)} m³):</span>
+      <span class="font-bold text-slate-900">${fmtMoney(valorH3)}</span>
+    </div>
+    <div class="flex justify-between text-amber-800 pt-1.5 mt-1 border-t border-emerald-200/60 font-bold">
+      <span>Serviço / Comum (${consumoServico.toFixed(1)} m³):</span>
+      <span>${fmtMoney(valorServico)}</span>
+    </div>
+  `;
+
+  box.classList.remove('hidden');
+};
 
 window.fecharModal = function() {
   document.getElementById('modal-inserir').classList.add('hidden');
@@ -1127,7 +1337,12 @@ async function initAdmin() {
   document.getElementById('ins-en-padrao')?.addEventListener('input', refreshEnergiaPreview);
   document.getElementById('ins-en-interno')?.addEventListener('input', () => { _tuyaManualOverride = true; _fmtSnapshotBadge(_tuyaSnapshotMeta, document.getElementById('ins-en-interno').value); refreshEnergiaPreview(); });
   document.getElementById('ins-en-interno-anterior')?.addEventListener('input', refreshEnergiaPreview);
-  document.getElementById('ins-fatura')?.addEventListener('input', refreshEnergiaPreview);
+  document.getElementById('ins-fatura')?.addEventListener('input', () => { refreshEnergiaPreview(); refreshAguaPreview(); });
+  
+  document.getElementById('ins-ag-cesan')?.addEventListener('input', refreshAguaPreview);
+  document.getElementById('ins-ag-h1')?.addEventListener('input', refreshAguaPreview);
+  document.getElementById('ins-ag-h2')?.addEventListener('input', refreshAguaPreview);
+  document.getElementById('ins-ag-h3')?.addEventListener('input', refreshAguaPreview);
   document.getElementById('ins-data')?.addEventListener('change', (e) => {
     if (state.currentTab === 'energia' && state.energyMeter === 'av_brasil' && !document.getElementById('modal-inserir').classList.contains('hidden')) {
       _tuyaManualOverride = false;

@@ -93,7 +93,44 @@ if ($action === 'get_tuya_by_date') {
     exit;
 }
 
-// Proxy para Edge Functions do Supabase (ex: ocr-gemini)
+// Salvar Chave do Gemini no MySQL
+if ($action === 'set_gemini_key') {
+    $body = json_decode(file_get_contents('php://input'), true);
+    $key = trim($body['key'] ?? '');
+    if (!$key) {
+        echo json_encode(["error" => "Chave não informada"]);
+        exit;
+    }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_secrets (
+            name VARCHAR(100) PRIMARY KEY,
+            value TEXT NOT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $stmt = $pdo->prepare("REPLACE INTO app_secrets (name, value) VALUES ('GEMINI_API_KEY', :v)");
+        $stmt->execute([':v' => $key]);
+        echo json_encode(["data" => true, "error" => null]);
+    } catch(Exception $e) {
+        echo json_encode(["error" => "Erro ao salvar chave no banco: " . $e->getMessage()]);
+    }
+    exit;
+}
+
+if ($action === 'get_gemini_key_status') {
+    try {
+        $stmt = $pdo->prepare("SELECT value FROM app_secrets WHERE name = 'GEMINI_API_KEY' LIMIT 1");
+        $stmt->execute();
+        $row = $stmt->fetch();
+        $hasKey = !empty($row['value']);
+        echo json_encode(["data" => ["has_key" => $hasKey], "error" => null]);
+    } catch(Exception $e) {
+        echo json_encode(["data" => ["has_key" => false], "error" => null]);
+    }
+    exit;
+}
+
+// Proxy para Leitura OCR via IA (Gemini Direct com Fallback de Modelos)
 if ($action === 'invoke_function') {
     $fnName = $_GET['name'] ?? '';
     if ($fnName !== 'ocr-gemini') {
@@ -103,7 +140,57 @@ if ($action === 'invoke_function') {
     
     $body = file_get_contents('php://input');
     
-    // Fazer a requisição para a Edge Function do Supabase
+    // 1) Busca a chave do Google Gemini salva no banco de dados local (app_secrets)
+    $geminiKey = null;
+    try {
+        $stmt = $pdo->prepare("SELECT value FROM app_secrets WHERE name = 'GEMINI_API_KEY' LIMIT 1");
+        $stmt->execute();
+        $row = $stmt->fetch();
+        if ($row && !empty($row['value'])) {
+            $geminiKey = trim($row['value']);
+        }
+    } catch(Exception $e) {}
+
+    if ($geminiKey) {
+        // Lista de modelos suportados para tentar automaticamente caso algum retorne 404
+        $modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-2.5-pro'];
+        $lastError = null;
+
+        foreach ($modelsToTry as $mName) {
+            $geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$mName:generateContent?key=" . $geminiKey;
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $geminiUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode === 200) {
+                echo json_encode(["data" => json_decode($response, true), "error" => null]);
+                exit;
+            } else {
+                $jsonResp = json_decode($response, true);
+                $lastError = $jsonResp['error']['message'] ?? $response;
+                if ($httpCode === 404) {
+                    continue; // Se o modelo não foi encontrado, tenta o próximo modelo da lista
+                }
+                break;
+            }
+        }
+
+        echo json_encode(["error" => "Erro na API Gemini: " . $lastError]);
+        exit;
+    }
+
+    // 2) Fallback para a Edge Function do Supabase (se a chave do Gemini não estiver cadastrada no MySQL)
     $supabaseUrl = "https://jmdlraaprcztshkfyeud.supabase.co/functions/v1/ocr-gemini";
     $supabaseKey = "sb_publishable_2c7MrFAZaCiQzY_EuQuizQ_wTgAzbIC";
     
@@ -112,6 +199,8 @@ if ($action === 'invoke_function') {
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Content-Type: application/json",
         "apikey: " . $supabaseKey,
@@ -119,11 +208,12 @@ if ($action === 'invoke_function') {
     ]);
     
     $response = curl_exec($ch);
+    $curlErr = curl_error($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     
     if ($httpCode !== 200) {
-        echo json_encode(["error" => "Erro na função Supabase ($httpCode): " . $response]);
+        echo json_encode(["error" => "Nenhuma chave ativa do Gemini encontrada e o serviço secundário do Supabase está inativo. Por favor, cadastre uma chave gratuita da API do Gemini no Painel Admin."]);
     } else {
         echo json_encode(["data" => json_decode($response, true), "error" => null]);
     }

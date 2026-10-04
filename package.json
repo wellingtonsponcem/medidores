@@ -1,4 +1,10 @@
 {
+  "name": "medidores",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx serve .",
+    "deploy": "python deploy.py"
+  },
   "dependencies": {
     "basic-ftp": "^5.2.0",
     "pg": "^8.20.0",

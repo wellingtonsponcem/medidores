@@ -11,6 +11,8 @@ files_to_upload = [
     "admin-painel.html",
     "app.js",
     "admin-painel.js",
+    "local-db-client.js",
+    "api.php",
     "styles.css",
     "logo.svg"
 ]
