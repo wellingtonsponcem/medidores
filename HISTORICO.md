@@ -50,7 +50,10 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Correção do **Layout do Modal de Inserção** (`admin-painel.html`): Removida tag `</div>` duplicada que encerrava precocemente o container do modal e o formulário, fazendo com que o botão "Salvar Registo Definitivo" vazasse e se estendesse por toda a tela em uma barra azul desconfigurada.
   - Aprimoramento da **Precisão do OCR de Hidrômetros e Fatura**: Reforçadas as regras do prompt do Gemini para ignorar roletes vermelhos (evitando leituras errôneas como 4910 ou 1189), priorizar a **Leitura Atual** na fatura CESAN e extrair a **Data da Leitura** (preenchendo automaticamente a data no formulário). Adicionada comparação e validação da **Leitura Anterior** com o último registro no banco de dados para garantir a continuidade histórica e filtro inteligente `sanitizeHidro` em `admin-painel.js`.
   - Correção do **Cálculo da Prévia do Rateio de Água** (`admin-painel.js`): Alinhada a prévia do frontend com a view SQL (`vw_agua_rateio`), onde o hidrômetro H1 mede o consumo conjunto da Casa 1 e Casa 2. O consumo da Casa 1 é corretamente calculado por `Consumo H1 - Consumo H2`, liberando o cálculo real do **Serviço/Área Comum (10,2 m³ / R$ 168,47)**.
-  - Correção do **Loop do Alerta de Chave da API**: Ajustada a checagem no bloco catch de `processarImagens()` em `admin-painel.js` para consultar `get_gemini_key_status` no MySQL, eliminando o pop-up repetido de solicitação da chave do Gemini quando a chave já está cadastrada no banco.
+  - **2026-10-05**:
+  - Inserção e sincronização das faturas de energia para **Novo Horizonte (Rua Inhambu 17)** e **Avenida Brasil (Praia de Carapebus)** ref. 10/2026.
+  - Executada a sincronização em tempo real via **Tuya Cloud API** para a Avenida Brasil, obtendo o snapshot do whatímetro de 5.589,71 kWh para o rateio preciso da Casa 2 (968,85 kWh / R$ 1.115,18) e Casa 1 (358,15 kWh / R$ 412,24).
+  - Lançada a leitura do submedidor Nansen (5.019 kWh) para Novo Horizonte, calculando o rateio da Casa 2 (204 kWh / R$ 248,11) e Casa 1 (68 kWh / R$ 82,71).
 
 
 
