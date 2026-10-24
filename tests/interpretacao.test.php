@@ -21,6 +21,8 @@ igual(Interpretacao::analisar('qual a situação?', 'casa2')['pergunta'], 'resum
 igual(Interpretacao::analisar('minha conta', 'casa1'), null, '"minha conta" não é coberto por regra e vai para a IA');
 igual(Interpretacao::analisar('última leitura', 'admin')['pergunta'], 'ultimo', 'última leitura');
 igual(Interpretacao::analisar('manda o texto pro zap', 'admin')['pergunta'], 'compartilhar', 'pedido de texto para copiar');
+igual(Interpretacao::analisar('manda o logo', 'admin')['pergunta'], 'logo', 'manda o logo vira consulta de logo');
+igual(Interpretacao::analisar('logotipo', 'casa1')['pergunta'], 'logo', 'logotipo vira consulta de logo');
 igual(Interpretacao::analisar('água', 'casa1')['pergunta'], 'agua', 'só a palavra, com acento');
 igual(Interpretacao::analisar('energia', 'casa3')['pergunta'], 'energia', 'só a palavra energia');
 

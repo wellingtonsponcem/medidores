@@ -32,6 +32,7 @@ const COMANDOS = [
     '/compartilhar' => 'Texto do rateio para copiar',
     '/pendentes' => 'Leituras aguardando confirmação',
     '/sincronizar' => 'Sincronizar whatímetro Tuya e Loja',
+    '/logo' => 'Envia o logo do D-Meter em PNG e JPG',
     '/vincular' => 'Entrar com o usuário do painel',
     '/sair' => 'Desvincular este aparelho',
     '/ajuda' => 'Lista o que o bot faz',
@@ -290,6 +291,11 @@ function aoComando(int $chatId, array $m, string $texto): void
             cmdUsuarios($chatId);
             return;
 
+        case 'logo':
+        case 'logotipo':
+            cmdLogo($chatId);
+            return;
+
         default:
             Telegram::enviarMensagem($chatId, "Não conheço o comando `/{$comando}`.\n\n" . resp_ajuda(ehAdmin($chatId)));
     }
@@ -500,6 +506,36 @@ function cmdUsuarios(int $chatId): void
     }
 }
 
+function cmdLogo(int $chatId): void
+{
+    Telegram::acaoChat($chatId, 'upload_photo');
+    $urlJpg = SITE_URL . '/logo.jpg';
+    $urlPng = SITE_URL . '/logo.png';
+    $urlSvg = SITE_URL . '/logo.svg';
+
+    $teclado = [
+        [
+            ['text' => '🌐 Ver SVG Vetorial', 'url' => $urlSvg],
+            ['text' => '📥 Baixar PNG HD', 'url' => $urlPng],
+        ]
+    ];
+
+    // 1. Envia o JPG como Foto com legenda e botões
+    Telegram::enviarFoto(
+        $chatId,
+        $urlJpg,
+        "🖼 *Logo D-Meter (JPG)*\n\n• Resolução: 1905x1875\n• Fundo: Branco\n• Ideal para: Documentos, faturas e relatórios",
+        $teclado
+    );
+
+    // 2. Envia o PNG como Documento (preserva canal Alpha e qualidade original sem compressão)
+    Telegram::enviarDocumento(
+        $chatId,
+        $urlPng,
+        "📄 *Logo D-Meter (PNG Transparente)*\n\n• Resolução: 1905x1875 (com canal Alpha)\n• Fundo: Transparente\n• Ideal para: Design, web e sobreposições"
+    );
+}
+
 // ============================================================ texto livre
 
 function aoTexto(int $chatId, array $m, string $texto): void
@@ -583,6 +619,9 @@ function responderConsulta(int $chatId, string $pergunta, ?string $local = null,
             return;
         case 'compartilhar':
             cmdCompartilhar($chatId);
+            return;
+        case 'logo':
+            cmdLogo($chatId);
             return;
         default:
             cmdResumo($chatId);

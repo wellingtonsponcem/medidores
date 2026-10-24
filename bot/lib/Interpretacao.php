@@ -86,6 +86,9 @@ class Interpretacao
         if (preg_match('/\b(compartilhar|copiar|whatsapp|texto)\b/', $t)) {
             return 'compartilhar';
         }
+        if (preg_match('/\b(logo|logotipo|marca)\b/', $t)) {
+            return 'logo';
+        }
         return null;
     }
 
@@ -247,7 +250,7 @@ class Interpretacao
                     'type' => 'OBJECT',
                     'properties' => [
                         'intencao' => ['type' => 'STRING', 'enum' => ['consulta', 'lancamento', 'conversa']],
-                        'consulta' => ['type' => 'STRING', 'enum' => ['resumo', 'agua', 'energia', 'ultimo', 'compartilhar']],
+                        'consulta' => ['type' => 'STRING', 'enum' => ['resumo', 'agua', 'energia', 'ultimo', 'compartilhar', 'logo']],
                         'local' => ['type' => 'STRING', 'enum' => ['av_brasil', 'rua_inhambu']],
                         'duvida' => ['type' => 'STRING'],
                         'resposta' => ['type' => 'STRING'],

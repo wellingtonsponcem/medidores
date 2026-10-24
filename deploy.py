@@ -22,6 +22,8 @@ ARQUIVOS = [
     'sync.php',
     'styles.css',
     'logo.svg',
+    'logo.png',
+    'logo.jpg',
     # bot do Telegram
     'bot/index.php',
     'bot/config.php',
@@ -38,6 +40,7 @@ PASTAS = ['bot/lib']
 
 ARQUIVOS_APAGAR = [
     'agua.html', 'energia.html', 'agua.js', 'energia.js', 'agua.css', 'energia.css',
+    'enviar_logo.php',
 ]
 
 

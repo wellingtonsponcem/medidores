@@ -27,6 +27,7 @@ function resp_ajuda(bool $ehAdmin): string
         . "/ultimo — últimas leituras brutas lançadas\n"
         . "/compartilhar — texto do rateio pronto para copiar\n"
         . "/pendentes — leituras aguardando sua confirmação\n"
+        . "/logo — logo do D-Meter em PNG e JPG\n"
         . "/sair — desvincular este aparelho\n";
 
     if ($ehAdmin) {

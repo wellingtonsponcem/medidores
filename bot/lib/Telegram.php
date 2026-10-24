@@ -76,6 +76,62 @@ class Telegram
         return self::enviarMensagem($chatId, $texto, $teclado);
     }
 
+    /**
+     * Envia uma foto (URL ou caminho relativo).
+     *
+     * @return array{ok:bool, resultado?:array, descricao?:string, status?:int}
+     */
+    public static function enviarFoto($chatId, string $foto, ?string $legenda = null, ?array $teclado = null, ?string $parseMode = 'Markdown'): array
+    {
+        if (!preg_match('#^https?://#i', $foto) && defined('SITE_URL')) {
+            $foto = rtrim(SITE_URL, '/') . '/' . ltrim($foto, '/');
+        }
+        $payload = ['chat_id' => $chatId, 'photo' => $foto];
+        if ($legenda !== null) {
+            $payload['caption'] = $legenda;
+            if ($parseMode !== null) {
+                $payload['parse_mode'] = $parseMode;
+            }
+        }
+        if ($teclado !== null) {
+            $payload['reply_markup'] = ['inline_keyboard' => $teclado];
+        }
+        $r = self::chamar('sendPhoto', $payload);
+        if (!$r['ok'] && $parseMode !== null && $legenda !== null) {
+            unset($payload['parse_mode']);
+            $r = self::chamar('sendPhoto', $payload);
+        }
+        return $r;
+    }
+
+    /**
+     * Envia um documento / arquivo sem compressão (URL ou caminho relativo).
+     *
+     * @return array{ok:bool, resultado?:array, descricao?:string, status?:int}
+     */
+    public static function enviarDocumento($chatId, string $documento, ?string $legenda = null, ?array $teclado = null, ?string $parseMode = 'Markdown'): array
+    {
+        if (!preg_match('#^https?://#i', $documento) && defined('SITE_URL')) {
+            $documento = rtrim(SITE_URL, '/') . '/' . ltrim($documento, '/');
+        }
+        $payload = ['chat_id' => $chatId, 'document' => $documento];
+        if ($legenda !== null) {
+            $payload['caption'] = $legenda;
+            if ($parseMode !== null) {
+                $payload['parse_mode'] = $parseMode;
+            }
+        }
+        if ($teclado !== null) {
+            $payload['reply_markup'] = ['inline_keyboard' => $teclado];
+        }
+        $r = self::chamar('sendDocument', $payload);
+        if (!$r['ok'] && $parseMode !== null && $legenda !== null) {
+            unset($payload['parse_mode']);
+            $r = self::chamar('sendDocument', $payload);
+        }
+        return $r;
+    }
+
     public static function editarMensagem($chatId, int $mensagemId, string $texto, ?array $teclado = null): array
     {
         $payload = [
