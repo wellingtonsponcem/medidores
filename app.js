@@ -123,8 +123,18 @@ window.salvarNovaSenha = async function() {
   const nova = document.getElementById('ipt-nova-senha').value;
   if(nova.trim() === "") return alert("A senha não pode estar vazia.");
   
-  const { error } = await supabaseClient.from('usuarios').update({ senha: nova, senha_alterada: true }).eq('id', userAuth.id);
-  if(error) return alert("Erro ao trocar senha: " + error.message);
+  // Rota própria: o morador não tem permissão de escrita na tabela usuarios
+  let erro = null;
+  try {
+    const res = await apiFetch(getApiUrl({ action: 'change_password' }), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha: nova })
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json || json.error) erro = (json && json.error) || ('HTTP ' + res.status);
+  } catch (e) { erro = e.message; }
+  if(erro) return alert("Erro ao trocar senha: " + erro);
   
   userAuth.senha_alterada = true;
   localStorage.setItem('userAuth', JSON.stringify(userAuth));

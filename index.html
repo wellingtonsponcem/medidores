@@ -95,23 +95,16 @@
   </div>
 
   <script type="module">
-    const SUPABASE_URL = "https://jmdlraaprcztshkfyeud.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_2c7MrFAZaCiQzY_EuQuizQ_wTgAzbIC";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // If already logged in, redirect
-    if (localStorage.getItem('userAuth')) {
+    // Já logado (token do servidor ou simulação do Modo Dev): vai direto ao painel
+    if (localStorage.getItem('userAuth') && (localStorage.getItem('authToken') || window.supabase.isDevMode())) {
       window.location.href = 'dashboard.html';
     }
 
     document.getElementById('form-login').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      let nome = document.getElementById('ipt-nome').value.trim();
-      // Normalização automática de erros de digitação comuns
-      if (nome.toLowerCase() === 'admn') {
-        nome = 'admin';
-      }
+
+      // A conferência da senha é no servidor: o navegador nunca vê a senha de ninguém
+      const nome = document.getElementById('ipt-nome').value.trim();
       const senha = document.getElementById('ipt-senha').value;
       const btn = document.getElementById('btn-submit');
       const err = document.getElementById('error-msg');
@@ -121,31 +114,24 @@
       err.classList.add('hidden');
 
       try {
-        const { data, error } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('nome', nome)
-          .eq('senha', senha)
-          .eq('ativo', 1);
+        const res = await fetch(getApiUrl({ action: 'login' }), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, senha })
+        });
+        const json = await res.json().catch(() => null);
 
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const user = data[0];
-          // Logged in!
+        if (res.ok && json && json.data && json.data.token) {
+          const user = json.data.usuario;
+          localStorage.setItem('authToken', json.data.token);
           localStorage.setItem('userAuth', JSON.stringify(user));
-          if(user.perfil === 'admin') localStorage.setItem('admin_logged', 'true');
+          if (user.perfil === 'admin') localStorage.setItem('admin_logged', 'true');
+          else localStorage.removeItem('admin_logged');
           window.location.href = 'dashboard.html';
+        } else if (res.status === 401) {
+          err.classList.remove('hidden');
         } else {
-          // Check hardcoded legacy (tolerante a erros comuns de digitação como "admn")
-          const nomeLower = nome.toLowerCase().trim();
-          if ((nomeLower === 'admin' || nomeLower === 'admn') && (senha === 'admin' || senha === 'admin123')) {
-             localStorage.setItem('userAuth', JSON.stringify({nome: 'admin', perfil: 'admin'}));
-             localStorage.setItem('admin_logged', 'true');
-             window.location.href = 'dashboard.html';
-          } else {
-             err.classList.remove('hidden');
-          }
+          throw new Error((json && json.error) || ('HTTP ' + res.status));
         }
       } catch (e) {
         console.error(e);

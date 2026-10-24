@@ -1,0 +1,27 @@
+# Segredos — nunca versionar.
+#
+# Regra: o Git guarda a FORMA, o servidor guarda o CONTEÚDO. Se um dia algum
+# destes arquivos entrar no repositório de novo, o dano não se desfaz com um
+# git rm: o valor continua no histórico e em qualquer clone já feito. Nesses
+# casos a única saída é girar a chave no painel do fornecedor.
+.env
+env
+medidores.env
+.secure/
+
+# Banco local: as credenciais ficam fora do public_html, em medidores.env.
+db_config.php
+
+# Saída de experimentos — não é código, e o api_output.json já pegou chave.
+api_output.json
+energy_output.json
+scratch_inspect_db.php
+
+# Dependências e cachê
+node_modules/
+__pycache__/
+*.pyc
+
+# Sistema
+.DS_Store
+Thumbs.db

@@ -14,55 +14,21 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
 ## Histórico
 
 - **2026-05-27**:
-  - Inicialização do repositório Git na branch `main`.
-  - Criação do arquivo `README.md`.
-  - Configuração do repositório remoto para `https://github.com/wellingtonsponcem/medidores.git`.
-  - Criação do arquivo de histórico inicial `HISTORICO.md`.
-  - Conclusão do primeiro commit e do envio (`git push`) para a branch remota `main`.
-  - Planejamento e definição dos passos para sincronização via SSH/Deploy do repositório no servidor de produção.
-  - Implementação de botões de Upload e Colar nos cards de leitura inteligente (Água e Energia), permitindo colar imagens diretamente do clipboard (Clipboard API) ou via atalho Ctrl+V.
-  - Correção de problemas de cache do script `admin-painel.js` no navegador adicionando atualização de versão (cache buster) no HTML.
-  - Aprimoramento da colagem com `window.focus()` e tratamento customizado de erros de clipboard vazio para evitar falsas exceções de permissão.
-  - Implementação de compressão automática de imagens (JPEG 80%, max 1200px) no frontend, otimizando o envio e corrigindo erros de payload no processamento OCR.
-  - Correção do erro HTTP 401 Unauthorized adicionando explicitamente os cabeçalhos de autorização anon nas chamadas da Edge Function do Supabase.
+  - Inicialização do repositório Git na branch `main`. Configuração do repositório remoto.
+  - Implementação de botões de Upload e Colar nos cards de leitura inteligente (Água e Energia), compressão automática JPEG e tratamento de erros de clipboard.
 - **2026-07-04**:
-  - Correção do acesso ao painel de admin no layout mobile, adicionando o botão de configurações no header mobile quando o usuário logado for admin.
-  - Correção de possíveis race conditions de carregamento de DOM no `app.js`, `dashboard.html` e `admin-painel.js` substituindo listeners puros de `DOMContentLoaded` por checagens dinâmicas de `document.readyState`.
-  - Adição de tratamento a valores nulos em `userAuth` para evitar quebras silenciosas na execução dos scripts globais.
-  - Atualização da senha do usuário `admin` no banco de dados para `'admin'`, facilitando o login real com dados completos.
-  - Implementação de normalização automática de input em `index.html` que corrige o erro de digitação comum `"admn"` para `"admin"` no campo de usuário.
-  - Aprimoramento do fallback de login legado no HTML para dar suporte a ambas as variações de escrita e senha (`admin`/`admn` e `admin`/`admin123`).
-  - Adição de botões para Logout (Sair) tanto no modo Desktop quanto no layout Mobile do Painel Administrativo (`admin-painel.html`), limpando as credenciais de sessão local.
-  - Migração de toda a arquitetura de banco de dados do Supabase (Cloud PostgreSQL) para o MySQL local da Hospedagem (Hostinger).
-  - Criação do arquivo de configurações de conexão `db_config.php`.
-  - Criação do script de migração automatizada `migration.php` que recria a estrutura das tabelas/views e importa todos os registros do Supabase via cURL.
-  - Implementação do endpoint centralizado de API em PHP `api.php` para tratamento seguro de requisições de CRUD.
-  - Criação do wrapper JS transparente `local-db-client.js` no frontend para simular as APIs do Supabase Client direcionando as chamadas para a `api.php`.
-  - Remoção/ocultação do seletor de localidade da Avenida Brasil na aba de indicadores de água do Dashboard, visto que a Av. Brasil não possui medidor de água.
-  - Refatoração completa das mensagens de WhatsApp e do modal de compartilhamento para buscar e exibir os nomes dos moradores dinamicamente do banco de dados (de acordo com o cadastro de cada perfil), removendo todos os nomes chumbados no código.
-  - Alteração dos scripts de cron/coleta Tuya (`coleta_tuya.php` e `coleta_tuya.js`) para salvar as medições no banco de dados MySQL local da hospedagem em vez do Supabase.
-- **2026-08-11**:
-  - Execução da atualização de esquema no banco MySQL remoto da hospedagem (`u306254544_medidores`), garantindo a criação da coluna `ativo TINYINT(1) DEFAULT 1` na tabela `usuarios` para resolver o erro SQL 1054 no login.
-- **2026-10-04**:
-  - Implementação do **Modo Desenvolvedor (Simulação Sandbox)** em `local-db-client.js`. O modo desenvolvedor concede acesso total ao projeto e direciona todas as alterações (inserções, edições e exclusões) para um banco em memória/sessionStorage, garantindo que o banco de dados MySQL de produção permaneça inalterado. Ao sair do modo desenvolvedor, os dados originais são completamente restaurados.
-  - Aprimoramento da **Entrada Manual de Leitura de Água** no Painel Admin (`admin-painel.html` e `admin-painel.js`). Adicionadas dicas visuais claras indicando a leitura apenas dos números pretos do hidrômetro, além de cálculo e prévia em tempo real do rateio por casa enquanto os valores são digitados, sem depender de IA.
-  - Correção da **Integração OCR Gemini**: Atualizada a seleção automática de modelos para `gemini-2.5-flash` em `api.php` eliminando o erro 404, e configurada a persistência permanente da chave API na tabela MySQL `app_secrets`. O sistema nunca mais solicita a chave repetidamente após o cadastro.
-  - Correção do **Layout do Modal de Inserção** (`admin-painel.html`): Removida tag `</div>` duplicada que encerrava precocemente o container do modal e o formulário, fazendo com que o botão "Salvar Registo Definitivo" vazasse e se estendesse por toda a tela em uma barra azul desconfigurada.
-  - Aprimoramento da **Precisão do OCR de Hidrômetros e Fatura**: Reforçadas as regras do prompt do Gemini para ignorar roletes vermelhos (evitando leituras errôneas como 4910 ou 1189), priorizar a **Leitura Atual** na fatura CESAN e extrair a **Data da Leitura** (preenchendo automaticamente a data no formulário). Adicionada comparação e validação da **Leitura Anterior** com o último registro no banco de dados para garantir a continuidade histórica e filtro inteligente `sanitizeHidro` em `admin-painel.js`.
-  - Correção do **Cálculo da Prévia do Rateio de Água** (`admin-painel.js`): Alinhada a prévia do frontend com a view SQL (`vw_agua_rateio`), onde o hidrômetro H1 mede o consumo conjunto da Casa 1 e Casa 2. O consumo da Casa 1 é corretamente calculado por `Consumo H1 - Consumo H2`, liberando o cálculo real do **Serviço/Área Comum (10,2 m³ / R$ 168,47)**.
-  - **2026-10-05**:
-  - Inserção e sincronização das faturas de energia para **Novo Horizonte (Rua Inhambu 17)** e **Avenida Brasil (Praia de Carapebus)** ref. 10/2026.
-  - Executada a sincronização em tempo real via **Tuya Cloud API** para a Avenida Brasil, obtendo o snapshot do whatímetro de 5.589,71 kWh para o rateio preciso da Casa 2 (968,85 kWh / R$ 1.115,18) e Casa 1 (358,15 kWh / R$ 412,24).
-  - Lançada a leitura do submedidor Nansen (5.019 kWh) para Novo Horizonte, calculando o rateio da Casa 2 (204 kWh / R$ 248,11) e Casa 1 (68 kWh / R$ 82,71).
-
-
-
-
-
-
-
-
-
-
-
-
+  - Migração de toda a arquitetura de banco de dados do Supabase para o MySQL local da Hospedagem (Hostinger), criação de `db_config.php`, `migration.php` e `api.php`.
+  - Refatoração completa das mensagens de WhatsApp e modais de compartilhamento com nomes dinâmicos dos moradores do banco. Coleta Tuya via MySQL.
+- **2026-08 e 2026-10**:
+  - Atualização MySQL (`ativo` em `usuarios`), modo sandbox, melhorias OCR Gemini e sincronia Tuya ref. 10/2026.
+- **2026-10-22**:
+  - Bot do Telegram (webhook em PHP) para lançar e consultar medidores com health check, `secret_token` obrigatório e dedupe por `update_id`.
+  - Regra inegociável: confirmação obrigatória via botões (`Pendencia`). Port da matemática e OCR do painel para `Rateio.php` e `Ocr.php`.
+  - Testes sem framework (`PdoFalso`) e isolamento de credenciais (`.gitignore`, `.env.example`).
+- **2026-10-23 e 2026-10-24**:
+  - Calibração de OCR com IA para faturas EDP (Av. Brasil e Inhambu), CESAN (Água), hidrômetros (H1, H2, H3) e watímetros (Nansen e Tuya).
+  - Fluxo loja2 (Fernando): permissão para envio do watímetro e conta da Av. Brasil, sincronia imediata com Tuya Cloud, cálculo diferencial e visualização restrita à própria unidade.
+  - Admins (admin e maria): retorno automático de mensagens separadas por morador prontas para WhatsApp (Água e Inhambu) e comando `/sincronizar`.
+  - Correção de roteamento contextual de imóveis: detecção inteligente de "Avenida Brasil" vs "Rua Inhambu" em perguntas naturais e respostas discriminadas.
+  - Integração robusta da chave Gemini via `app_secrets` no banco de dados e correção de dependência de `Http.php`.
+  - Cobertura de testes unitários expandida para 275 verificações 100% aprovadas. Deploy FTP e webhook sincronizados.
