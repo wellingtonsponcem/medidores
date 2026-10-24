@@ -25,6 +25,53 @@ function getApiUrl(queryParams = {}) {
   return queryString ? `${baseUrl}?${queryString}` : baseUrl;
 }
 
+// Token da sessão emitido pela api.php no login. É ele que o servidor confere —
+// o userAuth no localStorage serve só para a tela saber o nome e o perfil.
+const AUTH_TOKEN_KEY = 'authToken';
+
+function limparSessao() {
+  localStorage.removeItem('userAuth');
+  localStorage.removeItem('admin_logged');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('ignored_pwd');
+}
+
+function irParaLogin() {
+  limparSessao();
+  if (!window.location.pathname.endsWith('index.html') && !window.location.pathname.endsWith('/')) {
+    window.location.href = 'index.html';
+  }
+}
+
+/**
+ * fetch com o token da sessão. Toda chamada à api.php e ao sync.php passa por
+ * aqui; sessão expirada (401) devolve para o login, exceto no Modo Dev, que
+ * é simulação e não tem sessão no servidor.
+ */
+async function apiFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {});
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) headers['X-Auth-Token'] = token;
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401 && !localClient.isDevMode()) {
+    irParaLogin();
+  }
+  return res;
+}
+
+/** Encerra a sessão no servidor e volta para o login. */
+async function sair() {
+  try {
+    await apiFetch(getApiUrl({ action: 'logout' }), { method: 'POST' });
+  } catch (e) {}
+  sessionStorage.removeItem(DEV_MODE_KEY);
+  sessionStorage.removeItem(DEV_SHADOW_KEY);
+  limparSessao();
+  window.location.href = 'index.html';
+}
+window.sair = sair;
+window.apiFetch = apiFetch;
+
 async function getShadowTable(tableName) {
   let shadow = {};
   try {
@@ -37,7 +84,7 @@ async function getShadowTable(tableName) {
 
   // Busca snapshot inicial direto da api.php
   try {
-    const res = await fetch(getApiUrl({ table: tableName }));
+    const res = await apiFetch(getApiUrl({ table: tableName }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     let rows = json.data || [];
@@ -269,11 +316,12 @@ const localClient = {
             options.body = JSON.stringify(body);
           }
           
-          const res = await fetch(url, options);
-          if (!res.ok) {
+          const res = await apiFetch(url, options);
+          // 400/403 trazem a mensagem do servidor no JSON; só sem ela é erro HTTP cru
+          const json = await res.json().catch(() => null);
+          if (!json) {
              throw new Error(`Erro HTTP ${res.status}`);
           }
-          const json = await res.json();
           
           let result;
           if (json.error) {
@@ -302,7 +350,7 @@ const localClient = {
   functions: {
     invoke: async function(fnName, options = {}) {
       try {
-        const res = await fetch(getApiUrl({ action: 'invoke_function', name: fnName }), {
+        const res = await apiFetch(getApiUrl({ action: 'invoke_function', name: fnName }), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -362,6 +410,11 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', renderDevModeBanner);
 } else {
   renderDevModeBanner();
+}
+
+// Sessão do login antigo (sem token) não vale mais: o servidor recusaria tudo.
+if (localStorage.getItem('userAuth') && !localStorage.getItem(AUTH_TOKEN_KEY) && !localClient.isDevMode()) {
+  irParaLogin();
 }
 
 // Vincula ao escopo global do navegador

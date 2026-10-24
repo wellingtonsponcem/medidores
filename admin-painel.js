@@ -804,7 +804,7 @@ window.executeShareWhatsApp = async function (userId) {
     text += `\n\n*Acesse seu painel completo:* https://wedistinto.com/medidores/`;
     
     if (!user.senha_alterada) {
-       text += `\n\n*Aviso de Privacidade:*\nSeu usuario: ${user.nome}\nSua senha provisoria: ${user.senha}\nO acesso exigira uma redefinicao obrigatoria pelo aplicativo.`;
+       text += `\n\n*Aviso de Privacidade:*\nSeu usuario: ${user.nome}\nUse a senha provisoria que o administrador te passou.\nO acesso exigira uma redefinicao obrigatoria pelo aplicativo.`;
     }
   }
 
@@ -1174,7 +1174,7 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     
     let serverHasKey = false;
     try {
-      const statusRes = await fetch(getApiUrl({ action: 'get_gemini_key_status' }));
+      const statusRes = await apiFetch(getApiUrl({ action: 'get_gemini_key_status' }));
       const statusJson = await statusRes.json();
       serverHasKey = !!statusJson?.data?.has_key;
     } catch(err) {}
@@ -1210,7 +1210,7 @@ window.salvarChaveGemini = async function() {
   if (!currentKey || !currentKey.trim()) return false;
 
   try {
-    const res = await fetch(getApiUrl({ action: 'set_gemini_key' }), {
+    const res = await apiFetch(getApiUrl({ action: 'set_gemini_key' }), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: currentKey.trim() })
@@ -1552,7 +1552,7 @@ async function sincronizarTuya() {
   `;
   
   try {
-    const response = await fetch('sync.php');
+    const response = await apiFetch('sync.php');
     const result = await response.json();
     
     if (result.success) {
@@ -1596,7 +1596,7 @@ async function fetchTuyaForDate(dateStr) {
   // dateStr = YYYY-MM-DD — busca via api.php?action=get_tuya_by_date
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
   try {
-    const res = await fetch('api.php?action=get_tuya_by_date&date=' + encodeURIComponent(dateStr));
+    const res = await apiFetch(getApiUrl({ action: 'get_tuya_by_date', date: dateStr }));
     const json = await res.json();
     if (json.error) return null;
     return json.data; // {valor, data_real, estimado, delta_dias, interpolado}

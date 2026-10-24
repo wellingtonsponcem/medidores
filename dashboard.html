@@ -280,7 +280,7 @@
       <div class="text-sm font-medium text-slate-600" id="top-user-name">Olá, Morador</div>
       <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold" id="top-user-initial">M</div>
       <button onclick="abrirModalSenha(false)" class="ml-2 text-xs font-bold text-blue-500 hover:text-blue-700 transition" title="Redefinir minha senha atual">Mudar Senha</button>
-      <button onclick="sessionStorage.removeItem('ignored_pwd'); localStorage.removeItem('userAuth'); localStorage.removeItem('admin_logged'); window.location.href='index.html';" class="ml-2 text-xs font-bold text-red-500 hover:text-red-700 transition">Sair</button>
+      <button onclick="sair()" class="ml-2 text-xs font-bold text-red-500 hover:text-red-700 transition">Sair</button>
     </div>
   </nav>
 
@@ -453,7 +453,7 @@
       <a href="admin-painel.html" id="mob-btn-go-admin" class="hidden mobile-icon-button" style="cursor:pointer;color:#525e65;" title="Painel Admin">
         <span class="material-symbols-outlined mobile-material" style="font-size:22px;">settings</span>
       </a>
-      <button class="mobile-icon-button" onclick="sessionStorage.removeItem('ignored_pwd'); localStorage.removeItem('userAuth'); localStorage.removeItem('admin_logged'); window.location.href='index.html';" style="cursor:pointer;color:#525e65;">
+      <button class="mobile-icon-button" onclick="sair()" style="cursor:pointer;color:#525e65;">
         <span class="material-symbols-outlined mobile-material" style="font-size:22px;">logout</span>
       </button>
     </div>

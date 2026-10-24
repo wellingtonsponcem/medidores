@@ -1,6 +1,8 @@
 <?php
+// Origem livre continua: a autenticação é por token no cabeçalho, não por
+// cookie, então outro site não "pega carona" na sessão de quem está logado.
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: *");
+header("Access-Control-Allow-Headers: Content-Type, X-Auth-Token");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Content-Type: application/json; charset=utf-8");
 
@@ -8,7 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-require_once 'db_config.php';
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/bot/lib/Acesso.php';
 
 try {
     $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
@@ -21,7 +24,75 @@ try {
     exit;
 }
 
+function negar(int $codigo, string $mensagem): void
+{
+    http_response_code($codigo);
+    echo json_encode(["data" => null, "error" => $mensagem]);
+    exit;
+}
+
 $action = $_GET['action'] ?? null;
+
+// ---- login: a única rota aberta ----
+if ($action === 'login') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        negar(405, "Use POST");
+    }
+    $body = json_decode(file_get_contents('php://input'), true);
+    $nome = trim((string) ($body['nome'] ?? ''));
+    if (strtolower($nome) === 'admn') {
+        $nome = 'admin'; // erro de digitação comum, mantido do login antigo
+    }
+    $senha = (string) ($body['senha'] ?? '');
+    try {
+        $u = Acesso::autenticar($pdo, $nome, $senha);
+        if ($u === null) {
+            // freio barato contra tentativa em massa
+            usleep(700000);
+            negar(401, "Usuário ou senha incorretos");
+        }
+        $token = Acesso::criarSessao($pdo, (string) $u['id']);
+        echo json_encode(["data" => ["token" => $token, "usuario" => Acesso::usuarioPublico($u)], "error" => null]);
+    } catch (Exception $e) {
+        error_log('[api] login: ' . $e->getMessage());
+        negar(500, "Erro ao verificar o login");
+    }
+    exit;
+}
+
+// ---- daqui para baixo, só com sessão válida ----
+$token = Acesso::tokenDaRequisicao();
+$usuario = $token !== '' ? Acesso::usuarioDaSessao($pdo, $token) : null;
+if ($usuario === null) {
+    negar(401, "Sessão expirada. Entre novamente.");
+}
+$ehAdmin = ($usuario['perfil'] ?? '') === 'admin';
+
+if ($action === 'logout') {
+    Acesso::encerrarSessao($pdo, $token);
+    echo json_encode(["data" => true, "error" => null]);
+    exit;
+}
+
+// Troca da própria senha — a única escrita que um morador faz.
+if ($action === 'change_password') {
+    $body = json_decode(file_get_contents('php://input'), true);
+    $nova = (string) ($body['senha'] ?? '');
+    if (trim($nova) === '') {
+        negar(400, "A senha não pode estar vazia.");
+    }
+    $stmt = $pdo->prepare("UPDATE usuarios SET senha = :s, senha_alterada = 1 WHERE id = :id");
+    $stmt->execute([':s' => Acesso::gerarHash($nova), ':id' => $usuario['id']]);
+    // quem tinha a senha antiga e um token aberto perde o acesso
+    Acesso::encerrarSessoesDoUsuario($pdo, (string) $usuario['id'], $token);
+    echo json_encode(["data" => true, "error" => null]);
+    exit;
+}
+
+// Todas as ações restantes são do painel administrativo.
+if ($action !== null && !$ehAdmin) {
+    negar(403, "Apenas administradores");
+}
 
 // Snapshot Tuya por data da fatura — Av Brasil (sincronia diária 14h)
 if ($action === 'get_tuya_by_date') {
@@ -152,41 +223,16 @@ if ($action === 'invoke_function') {
     } catch(Exception $e) {}
 
     if ($geminiKey) {
-        // Lista de modelos suportados para tentar automaticamente caso algum retorne 404
-        $modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-2.5-pro'];
-        $lastError = null;
+        // Cascata de modelos centralizada: o bot do Telegram usa o mesmo caminho,
+        // então a lista de modelos só é mantida em um lugar (bot/lib/Gemini.php).
+        require_once __DIR__ . '/bot/lib/Gemini.php';
+        $r = Gemini::gerarJson($geminiKey, $body);
 
-        foreach ($modelsToTry as $mName) {
-            $geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$mName:generateContent?key=" . $geminiKey;
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $geminiUrl);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($httpCode === 200) {
-                echo json_encode(["data" => json_decode($response, true), "error" => null]);
-                exit;
-            } else {
-                $jsonResp = json_decode($response, true);
-                $lastError = $jsonResp['error']['message'] ?? $response;
-                if ($httpCode === 404) {
-                    continue; // Se o modelo não foi encontrado, tenta o próximo modelo da lista
-                }
-                break;
-            }
+        if ($r['ok']) {
+            echo json_encode(["data" => $r['data'], "error" => null]);
+        } else {
+            echo json_encode(["error" => "Erro na API Gemini: " . $r['erro']]);
         }
-
-        echo json_encode(["error" => "Erro na API Gemini: " . $lastError]);
         exit;
     }
 
@@ -227,29 +273,59 @@ if (!$table) {
     exit;
 }
 
-// Sanitização básica do nome da tabela/view
-$allowedTables = [
-    'usuarios', 'consumo_agua', 'consumo_energia', 'leitura_energia', 'app_secrets',
-    'vw_agua_rateio', 'vw_energia_rateio', 'vw_energia_rateio_admin'
-];
-if (!in_array($table, $allowedTables)) {
-    echo json_encode(["error" => "Acesso não permitido a esta tabela"]);
-    exit;
+$method = $_SERVER['REQUEST_METHOD'];
+
+// Tabela, método e perfil numa regra só — ver Acesso::TABELAS_ADMIN
+if (!is_string($table) || !Acesso::podeAcessar($usuario['perfil'] ?? null, $table, $method)) {
+    negar(403, "Acesso não permitido a esta tabela");
 }
 
-$method = $_SERVER['REQUEST_METHOD'];
+$filters = json_decode($_GET['filters'] ?? '{}', true);
+if (!is_array($filters)) $filters = [];
+foreach ($filters as $col => $val) {
+    if (!Acesso::identificadorValido($col) || !is_scalar($val) && $val !== null) {
+        negar(400, "Filtro inválido");
+    }
+}
+
+/**
+ * Corpo de um INSERT/UPDATE pronto para o SQL: nomes de coluna validados,
+ * booleanos em 0/1 e senha de usuário sempre gravada como hash.
+ */
+function corpoParaGravar(string $table): array
+{
+    $body = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($body) || count($body) === 0) {
+        negar(400, "Payload inválido");
+    }
+    foreach ($body as $k => $v) {
+        if (!Acesso::identificadorValido($k) || !is_scalar($v) && $v !== null) {
+            negar(400, "Campo inválido no payload");
+        }
+        if (is_bool($v)) {
+            $body[$k] = $v ? 1 : 0;
+        }
+    }
+    if ($table === 'usuarios' && array_key_exists('senha', $body)) {
+        if (trim((string) $body['senha']) === '') {
+            negar(400, "A senha não pode estar vazia.");
+        }
+        $body['senha'] = Acesso::gerarHash((string) $body['senha']);
+    }
+    return $body;
+}
 
 switch ($method) {
     case 'GET':
-        // Filtros
-        $filtersJson = $_GET['filters'] ?? '{}';
-        $filters = json_decode($filtersJson, true);
-        if (!is_array($filters)) $filters = [];
-
         // Ordenação
         $ordersJson = $_GET['orders'] ?? '[]';
         $orders = json_decode($ordersJson, true);
         if (!is_array($orders)) $orders = [];
+        foreach ($orders as $o) {
+            if (!is_array($o) || !Acesso::identificadorValido($o['column'] ?? null)) {
+                negar(400, "Ordenação inválida");
+            }
+        }
 
         $limit = isset($_GET['limit']) ? intval($_GET['limit']) : null;
         $single = isset($_GET['single']) && ($_GET['single'] === 'true' || $_GET['single'] === true);
@@ -283,16 +359,9 @@ switch ($method) {
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
 
-            // Converter booleanos de 0/1 do MySQL para true/false do JS
+            // Sem a senha, e com os booleanos de 0/1 do MySQL viram true/false do JS
             if ($table === 'usuarios') {
-                foreach ($rows as &$r) {
-                    if (isset($r['senha_alterada'])) {
-                        $r['senha_alterada'] = $r['senha_alterada'] == 1;
-                    }
-                    if (isset($r['ativo'])) {
-                        $r['ativo'] = $r['ativo'] == 1;
-                    }
-                }
+                $rows = array_map([Acesso::class, 'usuarioPublico'], $rows);
             }
 
             if ($single) {
@@ -308,18 +377,7 @@ switch ($method) {
         break;
 
     case 'POST':
-        $body = json_decode(file_get_contents('php://input'), true);
-        if (!is_array($body)) {
-            echo json_encode(["error" => "Payload inválido"]);
-            exit;
-        }
-
-        // Converter booleanos para MySQL
-        foreach ($body as $k => $v) {
-            if (is_bool($v)) {
-                $body[$k] = $v ? 1 : 0;
-            }
-        }
+        $body = corpoParaGravar($table);
 
         $cols = array_keys($body);
         $colList = implode("`, `", $cols);
@@ -329,31 +387,16 @@ switch ($method) {
         try {
             $stmt = $pdo->prepare($sql);
             $stmt->execute($body);
-            echo json_encode(["data" => $body, "error" => null]);
+            echo json_encode(["data" => $table === 'usuarios' ? Acesso::usuarioPublico($body) : $body, "error" => null]);
         } catch (Exception $e) {
             echo json_encode(["error" => "Erro na inserção: " . $e->getMessage()]);
         }
         break;
 
     case 'PUT':
-        $body = json_decode(file_get_contents('php://input'), true);
-        if (!is_array($body)) {
-            echo json_encode(["error" => "Payload inválido"]);
-            exit;
-        }
-
-        $filtersJson = $_GET['filters'] ?? '{}';
-        $filters = json_decode($filtersJson, true);
-        if (!is_array($filters) || count($filters) === 0) {
-            echo json_encode(["error" => "Filtros para atualização não especificados"]);
-            exit;
-        }
-
-        // Converter booleanos para MySQL
-        foreach ($body as $k => $v) {
-            if (is_bool($v)) {
-                $body[$k] = $v ? 1 : 0;
-            }
+        $body = corpoParaGravar($table);
+        if (count($filters) === 0) {
+            negar(400, "Filtros para atualização não especificados");
         }
 
         $setParts = [];
@@ -375,18 +418,19 @@ switch ($method) {
         try {
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
-            echo json_encode(["data" => $body, "error" => null]);
+            // senha redefinida pelo admin: quem estava logado com a antiga sai
+            if ($table === 'usuarios' && isset($body['senha']) && isset($filters['id'])) {
+                Acesso::encerrarSessoesDoUsuario($pdo, (string) $filters['id']);
+            }
+            echo json_encode(["data" => $table === 'usuarios' ? Acesso::usuarioPublico($body) : $body, "error" => null]);
         } catch (Exception $e) {
             echo json_encode(["error" => "Erro na atualização: " . $e->getMessage()]);
         }
         break;
 
     case 'DELETE':
-        $filtersJson = $_GET['filters'] ?? '{}';
-        $filters = json_decode($filtersJson, true);
-        if (!is_array($filters) || count($filters) === 0) {
-            echo json_encode(["error" => "Filtros para exclusão não especificados"]);
-            exit;
+        if (count($filters) === 0) {
+            negar(400, "Filtros para exclusão não especificados");
         }
 
         $sql = "DELETE FROM `$table` WHERE 1";

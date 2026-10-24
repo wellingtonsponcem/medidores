@@ -1,0 +1,27 @@
+# Defesa em profundidade.
+#
+# Em produção o medidores.env mora um nível acima do public_html, então o
+# servidor web nem o enxerga. Este arquivo é a rede de segurança para o caso de
+# alguém (ou um deploy) deixar cair um arquivo de variáveis dentro da webroot —
+# já acontece, e o preço é entregar a chave do Gemini num GET direto.
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+# O banco local também não deve ser servido: tem a senha do MySQL.
+<FilesMatch "^db_config\.php$">
+    Require all denied
+</FilesMatch>
+
+# O coletor da Tuya grava no banco e imprime o progresso: só entra por include
+# (sync.php com admin logado, ou o bot). Chamado direto pela URL, ficava aberto.
+<FilesMatch "^coleta_tuya\.(php|js)$">
+    Require all denied
+</FilesMatch>
+
+# Ninguém precisa ler os testes nem o histórico pelo navegador.
+<FilesMatch "^(HISTORICO\.md|README\.md)$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes

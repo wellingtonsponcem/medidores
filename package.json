@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "start": "npx serve .",
+    "test": "php tests/rodar.php",
     "deploy": "python deploy.py"
   },
   "dependencies": {
