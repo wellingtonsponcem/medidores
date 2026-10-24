@@ -466,9 +466,10 @@ function cmdSincronizar(int $chatId, array $args): void
             . "• *Leitura:* `{$val}`\n"
             . "• *Registro:* {$dt}\n\n";
 
-        $watLoja = Banco::obterSegredo('ULTIMO_WATIMETRO_LOJA2');
+        $watLoja = Banco::leituraFoto('ULTIMO_WATIMETRO_LOJA2');
         if ($watLoja) {
-            $s .= "🔌 *Watímetro Loja (Fernando):* `" . fmt_num((float) $watLoja, 2) . " kWh`\n\n";
+            $quando = $watLoja['em'] ? ' (foto de ' . fmt_data_br($watLoja['em']) . ')' : '';
+            $s .= "🔌 *Watímetro Loja (Fernando):* `" . fmt_num($watLoja['valor'], 2) . " kWh`{$quando}\n\n";
         }
         $s .= "Ambos os medidores estão sincronizados e prontos para o rateio da Av. Brasil.";
         Telegram::enviarMensagem($chatId, $s);
@@ -683,6 +684,10 @@ function aoReceberFoto(int $chatId, array $m, array $anexo): void
     $legenda = trim((string) ($m['caption'] ?? ''));
     $papel = $legenda !== '' ? papelDaLegenda($legenda) : null;
 
+    // a Loja 02 não tem conta de água: "fatura"/"conta" na legenda dela é a da EDP
+    if ($ehFernando && $papel === 'fatura') {
+        $papel = 'fatura_energia';
+    }
     if ($ehFernando && $papel !== null && !in_array($papel, ['interno', 'fatura_energia'], true)) {
         Telegram::enviarMensagem($chatId, "Você pode enviar fotos do watímetro da sua loja ou da fatura de energia da Av. Brasil.");
         return;
@@ -823,17 +828,34 @@ function processarUmArquivo(int $chatId, array $m, array $anexo, ?string $papel)
                 ? 'Parece ser ' . $classificado['rotulo'] . ', mas não tenho certeza.'
                 : 'Não consegui identificar essa foto sozinho.';
             Conversa::definir($chatId, 'classificando_foto', ['file_id' => (string) $anexo['file_id']]);
-            Telegram::enviarTeclado($chatId, $intro . "\n\nO que ela mostra?", tecladoDePapeis());
+            Telegram::enviarTeclado($chatId, $intro . "\n\nO que ela mostra?", tecladoDePapeis(perfilDe($chatId) === 'loja2'));
             return;
         }
     }
 
-    aoLerFotos($chatId, [['papel' => $papel, 'data' => $baixado['data'], 'mimeType' => $baixado['mimeType']]]);
+    aoLerFotos($chatId, [[
+        'papel' => $papel,
+        'data' => $baixado['data'],
+        'mimeType' => $baixado['mimeType'],
+        // a legenda decide o imóvel ("av brasil"); antes ela nunca chegava até lá
+        'legenda' => (string) ($m['caption'] ?? ''),
+    ]]);
 }
 
-/** Opções oferecidas quando a classificação automática não decidiu. */
-function tecladoDePapeis(): array
+/**
+ * Opções oferecidas quando a classificação automática não decidiu.
+ *
+ * A Loja 02 só manda conta de energia e o próprio watímetro — mostrar CESAN e
+ * hidrômetro para ela só abriria caminho para um toque errado.
+ */
+function tecladoDePapeis(bool $soEnergia = false): array
 {
+    if ($soEnergia) {
+        return [[
+            ['text' => '⚡ Fatura EDP', 'callback_data' => 'f:fatura_energia'],
+            ['text' => '🔌 Meu watímetro', 'callback_data' => 'f:interno'],
+        ]];
+    }
     return [
         [
             ['text' => '📄 Fatura CESAN', 'callback_data' => 'f:fatura'],
@@ -904,21 +926,31 @@ function aoLerFotos(int $chatId, array $fotos): void
             return;
         }
 
-        if ($local === 'av_brasil' || $perfil === 'loja2') {
-            Banco::salvarSegredo('ULTIMO_WATIMETRO_LOJA2', (string) $leituraWatimetro);
-            Pendencia::executarTuya([]);
-            $tuya = Banco::ultimoTuya();
-            $valTuya = $tuya ? fmt_num((float) $tuya['valor_extraido'], 2) : '---';
+        $recusa = Ocr::conferirRelogioNovo($local, $leituraWatimetro);
+        if ($recusa !== null) {
+            Telegram::enviarMensagem($chatId, $recusa);
+            return;
+        }
 
-            $s = "🔄 *Watímetros Sincronizados!*\n\n"
-                . "🔌 *Watímetro Loja (Fernando):* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n"
-                . "📊 *Watímetro Tuya (Graça):* `" . $valTuya . " kWh`\n\n"
-                . "Ambos os medidores foram sincronizados com sucesso!\n"
-                . "Assim que a conta da EDP da Av. Brasil for enviada, o cálculo do rateio será gerado automaticamente.";
+        if ($local === 'av_brasil') {
+            Banco::salvarLeituraFoto(Ocr::RELOGIO_POR_FOTO['av_brasil']['chave'], $leituraWatimetro);
+            // a Tuya mede a Casa 03; sincroniza junto para os dois relógios serem do mesmo dia
+            $sync = Pendencia::executarTuya([]);
+            $tuya = Banco::ultimoTuya();
+            $valTuya = $tuya ? fmt_num((float) $tuya['valor_extraido'], 2) . ' kWh' : '---';
+
+            $s = "🔌 *Watímetro Loja (Fernando) registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n";
+            if ($sync['ok']) {
+                $s .= "📊 *Watímetro Tuya (Graça) sincronizado:* `{$valTuya}`\n\n"
+                    . "Os dois relógios estão em dia. Assim que a conta da EDP da Av. Brasil for enviada, o rateio sai com eles.";
+            } else {
+                $s .= "📊 *Watímetro Tuya (Graça):* não sincronizou agora (último: `{$valTuya}`).\n\n"
+                    . "Sua leitura ficou guardada. O administrador pode rodar /sincronizar depois.";
+            }
             Telegram::enviarMensagem($chatId, $s);
             return;
         } else {
-            Banco::salvarSegredo('ULTIMO_WATIMETRO_CASA2', (string) $leituraWatimetro);
+            Banco::salvarLeituraFoto(Ocr::RELOGIO_POR_FOTO['rua_inhambu']['chave'], $leituraWatimetro);
             $s = "🔌 *Submedidor Casa 2 (Mirian) registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n\n"
                 . "Leitura registrada! Assim que a fatura da EDP for enviada, o rateio será calculado automaticamente.";
             Telegram::enviarMensagem($chatId, $s);
@@ -929,14 +961,15 @@ function aoLerFotos(int $chatId, array $fotos): void
     if ($temAgua) {
         $r = Ocr::montarAgua($fotos);
     } elseif ($temEnergia) {
-        $local = 'rua_inhambu';
+        // a Loja 02 só existe na Av. Brasil: a conta dela nunca vai para a Rua Inhambu
+        $local = $perfil === 'loja2' ? 'av_brasil' : 'rua_inhambu';
         foreach ($fotos as $f) {
             $leg = strtolower($f['legenda'] ?? '');
             if (strpos($leg, 'av') !== false || strpos($leg, 'brasil') !== false) {
                 $local = 'av_brasil';
             }
         }
-        $r = Ocr::montarEnergia($local, $fotos);
+        $r = Ocr::montarEnergia($local, $fotos, null, $perfil === 'loja2');
     } else {
         Telegram::enviarMensagem($chatId,
             "Não consegui identificar o que é essa foto.\n\n"
@@ -967,7 +1000,14 @@ function aoLerFotos(int $chatId, array $fotos): void
     if ($perfil === 'loja2') {
         // Fernando recebe de volta apenas o consumo e preço dele
         $rPreview = Pendencia::rateioDaPendencia($p);
-        Telegram::enviarMensagem($chatId, resp_rateio_fernando($rPreview, $nomes));
+        // o rateio calculado não carrega a data; sem ela o resumo saía "Resumo de Rateio - "
+        $msg = resp_rateio_fernando($rPreview + ['data' => $payload['data'] ?? null], $nomes);
+        if (empty($payload['interno2'])) {
+            $msg .= "\n\n⚠️ Sem uma foto nova do seu watímetro, o valor da loja saiu pela diferença do total. "
+                . "Mande a foto do display para o cálculo sair medido.";
+        }
+        $msg .= "\n\nO administrador ainda vai conferir antes de gravar.";
+        Telegram::enviarMensagem($chatId, $msg);
 
         // Notifica administradores para conferir e confirmar
         $admins = Banco::chatsPorPerfil('admin');

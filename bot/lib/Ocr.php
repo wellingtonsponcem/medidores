@@ -14,9 +14,81 @@ class Ocr
     public const PAPEIS_AGUA = ['fatura', 'h1', 'h2', 'h3'];
     public const PAPEIS_ENERGIA = ['fatura', 'interno'];
 
+    /** Relógio que cada imóvel recebe por foto, e a coluna do rateio onde ele vai parar. */
+    public const RELOGIO_POR_FOTO = [
+        'av_brasil' => ['chave' => 'ULTIMO_WATIMETRO_LOJA2', 'coluna' => 'leitura_interno_2'],
+        'rua_inhambu' => ['chave' => 'ULTIMO_WATIMETRO_CASA2', 'coluna' => 'leitura_interno'],
+    ];
+
     private static function chaveGemini(): ?string
     {
         return Banco::chaveGemini();
+    }
+
+    /** Valor do relógio já usado no último rateio gravado deste imóvel, ou null. */
+    public static function relogioUsadoNoRateio(string $local): ?float
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        $ant = $cfg ? Banco::ultimaEnergiaBruta($local) : null;
+        $v = $ant[$cfg['coluna'] ?? ''] ?? null;
+        return $v !== null && $v !== '' ? (float) $v : null;
+    }
+
+    /**
+     * Confere a leitura nova de um relógio antes de guardá-la.
+     *
+     * Relógio de energia só anda para frente. Uma leitura menor que a última
+     * conhecida é foto errada (outro medidor, dígito mal lido) — e, guardada,
+     * entraria calada no próximo rateio.
+     *
+     * @return string|null mensagem de recusa, ou null quando está tudo certo
+     */
+    public static function conferirRelogioNovo(string $local, float $nova): ?string
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        if ($cfg === null) {
+            return null;
+        }
+        $refs = array_filter([
+            Banco::leituraFoto($cfg['chave'])['valor'] ?? null,
+            self::relogioUsadoNoRateio($local),
+        ], fn($v) => $v !== null);
+        if (!$refs) {
+            return null;
+        }
+        $anterior = max($refs);
+        if ($nova < $anterior) {
+            return 'A leitura ' . fmt_num($nova, 2) . ' kWh é menor que a última registrada ('
+                . fmt_num($anterior, 2) . " kWh). Relógio não anda para trás — confira a foto e mande de novo.\n\n"
+                . 'Não guardei nada.';
+        }
+        return null;
+    }
+
+    /**
+     * Leitura do relógio por foto que pode entrar no rateio deste mês.
+     *
+     * Antes, a última foto valia para sempre: se ninguém mandasse uma nova, o
+     * rateio seguinte reaproveitava a do mês passado e a unidade saía com
+     * consumo zero sem aviso. Agora uma foto que não passou da leitura já usada
+     * no último rateio é tratada como velha e fica de fora.
+     *
+     * @return array{valor: ?float, aviso: ?string}
+     */
+    public static function relogioParaRateio(string $local, string $rotulo): array
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        $foto = $cfg ? Banco::leituraFoto($cfg['chave']) : null;
+        if ($foto === null) {
+            return ['valor' => null, 'aviso' => null];
+        }
+        $usado = self::relogioUsadoNoRateio($local);
+        if ($usado !== null && $foto['valor'] <= $usado) {
+            $quando = $foto['em'] ? ' (foto de ' . fmt_data_br($foto['em']) . ')' : '';
+            return ['valor' => null, 'aviso' => "A última foto do relógio da {$rotulo} — "
+                . fmt_num($foto['valor'], 2) . " kWh{$quando} — já entrou no rateio anterior. Peça uma foto nova."];
+        }
+        return ['valor' => $foto['valor'], 'aviso' => null];
     }
 
     /**
@@ -359,8 +431,14 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
         return ['ok' => true, 'payload' => $payload, 'avisos' => $corrigido['avisos']];
     }
 
-    /** Monta a leitura de energia pronta para virar pendência. */
-    public static function montarEnergia(string $local, array $fotos, ?string $data = null): array
+    /**
+     * Monta a leitura de energia pronta para virar pendência.
+     *
+     * @param bool $travarLocal o remetente só tem um imóvel (a Loja 02 é só da Av.
+     *   Brasil): o local não muda pelo que a IA achar do endereço — se ela
+     *   discordar, vira aviso para o admin conferir.
+     */
+    public static function montarEnergia(string $local, array $fotos, ?string $data = null, bool $travarLocal = false): array
     {
         $local = $local === 'av_brasil' ? 'av_brasil' : 'rua_inhambu';
         $r = self::ler($local, $fotos);
@@ -368,10 +446,17 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             return ['ok' => false, 'erro' => $r['erro']];
         }
         $v = $r['valores'];
+        $avisos = [];
 
         // Se a fatura EDP indicou o local exato (Av. Brasil vs Rua Inhambu), respeita
-        if (!empty($v['local']) && in_array($v['local'], ['av_brasil', 'rua_inhambu'], true)) {
-            $local = $v['local'];
+        $localLido = $v['local'] ?? null;
+        if (in_array($localLido, ['av_brasil', 'rua_inhambu'], true) && $localLido !== $local) {
+            if ($travarLocal) {
+                $avisos[] = 'O endereço da fatura parece ser da ' . energia_config($localLido)['rotulo']
+                    . ', mas quem enviou só tem a ' . energia_config($local)['rotulo'] . '. Confira se é a conta certa.';
+            } else {
+                $local = $localLido;
+            }
         }
         if (empty($data) && !empty($v['dataLeitura'])) {
             $dataIso = fmt_data_iso($v['dataLeitura']);
@@ -405,10 +490,11 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
                 }
             }
 
-            // O watímetro da Loja 02 (Fernando) pode ter sido sincronizado por foto
-            $watLoja = Banco::obterSegredo('ULTIMO_WATIMETRO_LOJA2');
-            if ($watLoja) {
-                $payload['interno2'] = (float) $watLoja;
+            // O watímetro da Loja 02 (Fernando) chega por foto — desde que seja deste mês
+            $watLoja = self::relogioParaRateio('av_brasil', 'Loja 02');
+            $payload['interno2'] = $watLoja['valor'];
+            if ($watLoja['aviso']) {
+                $payload['avisos_ocr'][] = $watLoja['aviso'];
             }
 
             $payload['ref1'] = $ant ? (float) ($ant['leitura_interno_anterior_ref'] ?? $ant['leitura_interno'] ?? 0) : null;
@@ -417,9 +503,12 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             }
         } elseif ($local === 'rua_inhambu') {
             if ($payload['interno'] <= 0) {
-                $watMirian = Banco::obterSegredo('ULTIMO_WATIMETRO_CASA2');
-                if ($watMirian) {
-                    $payload['interno'] = (float) $watMirian;
+                $watMirian = self::relogioParaRateio('rua_inhambu', 'Casa 2');
+                if ($watMirian['valor'] !== null) {
+                    $payload['interno'] = $watMirian['valor'];
+                }
+                if ($watMirian['aviso']) {
+                    $payload['avisos_ocr'][] = $watMirian['aviso'];
                 }
             }
         }
@@ -427,6 +516,6 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
         if ($payload['padrao'] <= 0) {
             return ['ok' => false, 'erro' => 'Não consegui ler o consumo total da fatura de energia. Foto mais nítida, por favor.'];
         }
-        return ['ok' => true, 'payload' => $payload, 'avisos' => []];
+        return ['ok' => true, 'payload' => $payload, 'avisos' => $avisos];
     }
 }

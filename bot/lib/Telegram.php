@@ -38,6 +38,11 @@ class Telegram
         if (!is_array($json)) {
             return ['ok' => false, 'descricao' => 'Resposta inválida do Telegram', 'status' => $res['status']];
         }
+        // A API responde em inglês ("result", "description"); o resto do bot lê
+        // os nomes em português. Sem esta tradução o getFile nunca achava o
+        // file_path e TODA foto morria em "Não consegui baixar o arquivo".
+        $json['resultado'] = $json['result'] ?? null;
+        $json['descricao'] = $json['description'] ?? null;
         $json['status'] = $res['status'];
         return $json;
     }

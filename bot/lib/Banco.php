@@ -455,6 +455,29 @@ class Banco
         $stmt->execute([':n' => $nome, ':v' => $valor]);
     }
 
+    /**
+     * Guarda a leitura de um relógio enviada por foto (watímetro da Loja 02,
+     * submedidor da Casa 2) junto com o dia em que chegou.
+     *
+     * A data mora numa chave irmã (<chave>_EM) para não quebrar quem já lê a
+     * chave principal como número.
+     */
+    public static function salvarLeituraFoto(string $chave, float $valor): void
+    {
+        self::salvarSegredo($chave, (string) $valor);
+        self::salvarSegredo($chave . '_EM', fmt_hoje());
+    }
+
+    /** @return array{valor: float, em: ?string}|null */
+    public static function leituraFoto(string $chave): ?array
+    {
+        $valor = self::obterSegredo($chave);
+        if ($valor === null || !is_numeric($valor)) {
+            return null;
+        }
+        return ['valor' => (float) $valor, 'em' => self::obterSegredo($chave . '_EM')];
+    }
+
     public static function obterSegredo(string $nome): ?string
     {
         self::garantirTabelas();

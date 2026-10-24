@@ -143,7 +143,9 @@ class Pendencia
             'interno_ref' => $anterior['leitura_interno_anterior_ref'] ?? $anterior['leitura_interno'] ?? 0,
             'interno2_ref' => $anterior['leitura_interno_2_anterior_ref'] ?? $anterior['leitura_interno_2'] ?? null,
         ];
-        return conferir_energia($d, $ref, $r);
+        // os avisos do OCR (relógio velho, endereço trocado) eram guardados mas
+        // nunca chegavam à mensagem — quem confirmava não os via
+        return array_values(array_unique(array_merge(conferir_energia($d, $ref, $r), $d['avisos_ocr'] ?? [])));
     }
 
     /**
@@ -223,8 +225,12 @@ class Pendencia
      * O coleta_tuya.php faz echo e usa globals, então isolamos com output buffer.
      * Se o .env do cron não existir devolvemos erro amigável em vez de deixar o
      * die() do script derrubar a resposta do webhook.
+     *
+     * Pública porque o /sincronizar, a foto do watímetro e a fatura da Av.
+     * Brasil também disparam a coleta. Era private, e cada uma dessas chamadas
+     * morria com erro fatal — o Telegram reenviava o update e o bot repetia.
      */
-    private static function executarTuya(array $d): array
+    public static function executarTuya(array $d): array
     {
         $arquivo = BOT_RAIZ . '/cron/coleta_tuya.php';
         $envDoCron = BOT_RAIZ . '/cron/.env';
