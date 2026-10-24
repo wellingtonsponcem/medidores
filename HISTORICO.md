@@ -29,6 +29,6 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Calibração de OCR com IA para faturas EDP (Av. Brasil e Inhambu), CESAN (Água), hidrômetros (H1, H2, H3) e watímetros (Nansen e Tuya).
   - Fluxo loja2 (Fernando): permissão para envio do watímetro e conta da Av. Brasil, sincronia imediata com Tuya Cloud, cálculo diferencial e visualização restrita à própria unidade.
   - Admins (admin e maria): retorno automático de mensagens separadas por morador prontas para WhatsApp (Água e Inhambu) e comando `/sincronizar`.
-  - Correção de roteamento contextual de imóveis: detecção inteligente de "Avenida Brasil" vs "Rua Inhambu" em perguntas naturais e respostas discriminadas.
-  - Integração robusta da chave Gemini via `app_secrets` no banco de dados e correção de dependência de `Http.php`.
-  - Cobertura de testes unitários expandida para 275 verificações 100% aprovadas. Deploy FTP e webhook sincronizados.
+  - Correção no processamento de fotos do Telegram (`resultado`/`descricao`), visibilidade pública de `Pendencia::executarTuya`, validação de faturas da Loja 2 e avisos de divergência.
+  - Camada de segurança e autenticação server-side (`Acesso.php`, `api.php`, `sync.php`), hash de senhas com rehash automático e isolamento de `app_secrets`.
+  - Cobertura expandida para 9 suites e 338 verificações 100% aprovadas. Deploy na Hostinger com purga de cache via Hostinger MCP.
