@@ -33,6 +33,7 @@ const COMANDOS = [
     '/pendentes' => 'Leituras aguardando confirmação',
     '/sincronizar' => 'Sincronizar whatímetro Tuya e Loja',
     '/logo' => 'Envia o logo do D-Meter em PNG e JPG',
+    '/senha' => 'Redefinir senha de morador ou admin',
     '/vincular' => 'Entrar com o usuário do painel',
     '/sair' => 'Desvincular este aparelho',
     '/ajuda' => 'Lista o que o bot faz',
@@ -291,6 +292,12 @@ function aoComando(int $chatId, array $m, string $texto): void
             cmdUsuarios($chatId);
             return;
 
+        case 'senha':
+        case 'resetarsenha':
+        case 'redefinir':
+            cmdRedefinirSenha($chatId, $args);
+            return;
+
         case 'logo':
         case 'logotipo':
             cmdLogo($chatId);
@@ -534,6 +541,40 @@ function cmdLogo(int $chatId): void
         $urlPng,
         "📄 *Logo D-Meter (PNG Transparente)*\n\n• Resolução: 1905x1875 (com canal Alpha)\n• Fundo: Transparente\n• Ideal para: Design, web e sobreposições"
     );
+}
+
+function cmdRedefinirSenha(int $chatId, array $args): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, resp_sem_permissao());
+        return;
+    }
+    if (count($args) < 2) {
+        Telegram::enviarMensagem($chatId, "Para redefinir a senha de um usuário, use:\n`/senha usuario novasenha`\n\nExemplo: `/senha maria 123456`");
+        return;
+    }
+    $usuario = trim((string) $args[0]);
+    $novaSenha = trim((string) $args[1]);
+    if (strlen($novaSenha) < 4) {
+        Telegram::enviarMensagem($chatId, "⚠️ A nova senha deve ter pelo menos 4 caracteres.");
+        return;
+    }
+
+    try {
+        $ok = Banco::redefinirSenha($usuario, $novaSenha);
+        if ($ok) {
+            Telegram::enviarMensagem(
+                $chatId,
+                "✅ Senha do usuário *{$usuario}* redefinida com sucesso para: `{$novaSenha}`\n\n"
+                . "A pessoa já pode enviar no bot do Telegram:\n"
+                . "`/vincular {$usuario} {$novaSenha}`"
+            );
+        } else {
+            Telegram::enviarMensagem($chatId, "⚠️ Usuário *{$usuario}* não foi encontrado no cadastro.");
+        }
+    } catch (Exception $e) {
+        Telegram::enviarMensagem($chatId, "Erro ao redefinir a senha: " . $e->getMessage());
+    }
 }
 
 // ============================================================ texto livre

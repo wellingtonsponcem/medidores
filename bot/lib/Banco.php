@@ -408,6 +408,15 @@ class Banco
         return Acesso::autenticar(self::pdo(), $nome, $senha);
     }
 
+    /** Redefine a senha de um usuário gravando com hash seguro. */
+    public static function redefinirSenha(string $nome, string $novaSenha): bool
+    {
+        $hash = Acesso::gerarHash($novaSenha);
+        $stmt = self::pdo()->prepare("UPDATE usuarios SET senha = :s, senha_alterada = 0 WHERE LOWER(nome) = LOWER(:n)");
+        $stmt->execute([':s' => $hash, ':n' => trim($nome)]);
+        return $stmt->rowCount() > 0;
+    }
+
     /** Mapeia perfil -> nome do morador, para as mensagens saírem com nome de gente. */
     public static function nomesPorPerfil(): array
     {

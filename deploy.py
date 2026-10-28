@@ -40,7 +40,7 @@ PASTAS = ['bot/lib']
 
 ARQUIVOS_APAGAR = [
     'agua.html', 'energia.html', 'agua.js', 'energia.js', 'agua.css', 'energia.css',
-    'enviar_logo.php',
+    'enviar_logo.php', 'test_maria.php',
 ]
 
 
