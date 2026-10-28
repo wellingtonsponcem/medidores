@@ -31,6 +31,6 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Admins (admin e maria): retorno automático de mensagens separadas por morador prontas para WhatsApp (Água e Inhambu) e comando `/sincronizar`.
   - Correção no processamento de fotos do Telegram (`resultado`/`descricao`), visibilidade pública de `Pendencia::executarTuya`, validação de faturas da Loja 2 e avisos de divergência.
   - Camada de segurança e autenticação server-side (`Acesso.php`, `api.php`, `sync.php`), hash de senhas com rehash automático e isolamento de `app_secrets`.
-  - Renderização do logo em PNG de alta resolução (fundo transparente) e JPG (fundo branco) a partir do SVG; envio imediato para admins via Telegram e novo comando `/logo`.
-  - Novo comando `/senha` para administradores redefinirem senhas de usuários diretamente pelo Telegram com hash seguro.
-  - Cobertura expandida para 9 suites e 340 verificações 100% aprovadas. Deploy na Hostinger com purga de cache via Hostinger MCP.
+  - Renderização do logo em PNG de alta resolução (fundo transparente) e JPG (fundo branco) a partir do SVG; comando `/logo` e `/senha`.
+  - Correção na identificação de fotos em álbum no Telegram: classificação conjunta via `Ocr::classificarAlbum`, lock atômico por álbum (`master:<id>`) imune a divergência de timezone e fim das mensagens duplicadas de erro.
+  - Cobertura expandida para 353 verificações 100% aprovadas. Deploy na Hostinger com purga de cache.

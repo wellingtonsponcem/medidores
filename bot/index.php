@@ -774,11 +774,11 @@ function aoReceberFoto(int $chatId, array $m, array $anexo): void
     }
 
     $albumId = (string) ($m['media_group_id'] ?? '');
-    if ($papel !== null || $albumId === '') {
-        processarUmArquivo($chatId, $m, $anexo, $papel);
+    if ($albumId !== '') {
+        processarAlbum($chatId, $m, $anexo, $albumId, $papel);
         return;
     }
-    processarAlbum($chatId, $m, $anexo, $albumId);
+    processarUmArquivo($chatId, $m, $anexo, $papel);
 }
 
 /** Legenda curta diz o que a foto é — "h1", "fatura", "energia", "relógio". */
@@ -812,45 +812,79 @@ function papelDaLegenda(string $legenda): ?string
  *
  * Guardamos as peças e esperamos uma pausa antes de processar — o Telegram manda
  * as fotos de um álbum em poucos segundos. Quem vencer o UPDATE atômico de
- * status faz a leitura; os demais processos saem sem tocar no banco, que é o
- * mesmo truque do album.js do Gampo.
+ * status no registro master faz a leitura; os demais processos saem sem tocar
+ * no banco ou enviar mensagens duplicadas.
  */
-function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): void
+function processarAlbum(int $chatId, array $m, array $anexo, string $albumId, ?string $papel = null): void
 {
     Banco::garantirTabelas();
     $pdo = Banco::pdo();
 
+    $agora = time();
+    $msgId = (int) ($m['message_id'] ?? 0);
+
+    // Grava cada foto individual do álbum
     $stmt = $pdo->prepare(
         'INSERT INTO telegram_album (id, chat_id, mensagem_id, file_id, papel, status, atualizado_em)
-         VALUES (:id, :chat, :msg, :file, NULL, "recebendo", NOW())
-         ON DUPLICATE KEY UPDATE file_id = VALUES(file_id), atualizado_em = NOW()'
+         VALUES (:id, :chat, :msg, :file, :papel, "recebendo", NOW())
+         ON DUPLICATE KEY UPDATE file_id = VALUES(file_id), papel = COALESCE(VALUES(papel), papel), atualizado_em = NOW()'
     );
     $stmt->execute([
-        ':id' => $albumId . ':' . (int) ($m['message_id'] ?? 0),
+        ':id' => $albumId . ':' . $msgId,
         ':chat' => $chatId,
-        ':msg' => (int) ($m['message_id'] ?? 0),
+        ':msg' => $msgId,
         ':file' => (string) $anexo['file_id'],
+        ':papel' => $papel,
+    ]);
+
+    // Registro coordenador do álbum: armazena timestamp PHP (int) no campo mensagem_id
+    $stmtMaster = $pdo->prepare(
+        'INSERT INTO telegram_album (id, chat_id, mensagem_id, file_id, papel, status, atualizado_em)
+         VALUES (:id, :chat, :ts, "", NULL, "recebendo", NOW())
+         ON DUPLICATE KEY UPDATE mensagem_id = :ts, status = IF(status = "processando", status, "recebendo"), atualizado_em = NOW()'
+    );
+    $stmtMaster->execute([
+        ':id' => 'master:' . $albumId,
+        ':chat' => $chatId,
+        ':ts' => $agora,
     ]);
 
     $inicio = microtime(true);
     while (true) {
         usleep(ALBUM_PASSO_MS * 1000);
-        $parado = silencioDoAlbum($albumId);
+
+        // Verifica estado do coordenador
+        $sel = $pdo->prepare('SELECT mensagem_id, status FROM telegram_album WHERE id = :id');
+        $sel->execute([':id' => 'master:' . $albumId]);
+        $master = $sel->fetch();
+
+        // Se outro processo já assumiu o álbum, ou se foi cancelado, sai silenciosamente
+        if (!$master || $master['status'] !== 'recebendo') {
+            return;
+        }
+
+        $ultimoTs = (int) $master['mensagem_id'];
+        $silencio = (time() - $ultimoTs) * 1000 >= ALBUM_SILENCIO_MS;
         $estourou = (microtime(true) - $inicio) * 1000 >= ALBUM_LIMITE_MS;
-        if ($parado || $estourou) {
+
+        if ($silencio || $estourou) {
             break;
         }
     }
 
-    // claim: só um processo segue daqui para a leitura por IA
-    $claim = $pdo->prepare('UPDATE telegram_album SET status = "lendo" WHERE id LIKE :a AND status = "recebendo"');
-    $claim->execute([':a' => $albumId . ':%']);
+    // Claim atômico: exatamente UM processo consegue mudar de "recebendo" para "processando"
+    $claim = $pdo->prepare('UPDATE telegram_album SET status = "processando" WHERE id = :id AND status = "recebendo"');
+    $claim->execute([':id' => 'master:' . $albumId]);
     if ($claim->rowCount() === 0) {
-        return; // outro processo assumiu o álbum
+        return; // Outro processo concorrente já assumiu
     }
 
-    $sel = $pdo->prepare('SELECT * FROM telegram_album WHERE id LIKE :a ORDER BY atualizado_em, id');
-    $sel->execute([':a' => $albumId . ':%']);
+    // Busca todas as fotos do álbum, excluindo o registro master
+    $sel = $pdo->prepare('SELECT * FROM telegram_album WHERE id LIKE :a AND id != :m ORDER BY mensagem_id ASC, id ASC');
+    $sel->execute([
+        ':a' => $albumId . ':%',
+        ':m' => 'master:' . $albumId,
+    ]);
     $fotos = $sel->fetchAll();
 
     $fotosBase = [];
@@ -859,7 +893,12 @@ function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): v
         if (!$baixado['ok']) {
             continue;
         }
-        $fotosBase[] = ['papel' => $f['papel'] ?? '', 'data' => $baixado['data'], 'mimeType' => $baixado['mimeType']];
+        $fotosBase[] = [
+            'papel' => $f['papel'] ?: null,
+            'data' => $baixado['data'],
+            'mimeType' => $baixado['mimeType'],
+            'legenda' => '',
+        ];
     }
 
     if (!$fotosBase) {
@@ -867,22 +906,21 @@ function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): v
         return;
     }
 
-    aoLerFotos($chatId, $fotosBase);
-}
-
-function silencioDoAlbum(string $albumId): bool
-{
-    try {
-        $stmt = Banco::pdo()->prepare('SELECT MAX(atualizado_em) AS ultimo FROM telegram_album WHERE id LIKE :a');
-        $stmt->execute([':a' => $albumId . ':%']);
-        $row = $stmt->fetch();
-        if (!$row || !$row['ultimo']) {
-            return false;
+    // Se alguma foto do álbum não tiver papel definido, classifica o álbum via IA
+    $precisaClassificar = false;
+    foreach ($fotosBase as $fb) {
+        if (empty($fb['papel'])) {
+            $precisaClassificar = true;
+            break;
         }
-        return (time() - strtotime($row['ultimo'])) * 1000 >= ALBUM_SILENCIO_MS;
-    } catch (Exception $e) {
-        return true;
     }
+
+    if ($precisaClassificar) {
+        Telegram::acaoChat($chatId, 'typing');
+        $fotosBase = Ocr::classificarAlbum($fotosBase);
+    }
+
+    aoLerFotos($chatId, $fotosBase);
 }
 
 /** Arquivo único (foto ou imagem anexada como documento). */

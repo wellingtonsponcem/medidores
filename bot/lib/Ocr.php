@@ -163,15 +163,16 @@ class Ocr
         $prompt = "Analise a imagem e classifique o que ela mostra.\n"
             . "Contexto: são fotos de contas e medidores de um condomínio brasileiro.\n\n"
             . "Responda APENAS o JSON, sem markdown.\n\n"
-            . 'Valores possiveis para "tipo": "fatura_agua" (fatura da CESAN/agua), '
-            . '"h1" (hidrometro com etiqueta/adesivo 01 ou H1 visivel), '
-            . '"h2" (hidrometro com etiqueta/adesivo 02 ou H2 visivel), '
-            . '"h3" (hidrometro com etiqueta/adesivo 03 ou H3 visivel), '
-            . '"hidrometro" (hidrometro sem etiqueta identificadora clara), '
-            . '"fatura_energia" (fatura de luz/EDP), '
-            . '"relogio" (relatorio interno, submedidor Nansen ou whatimetro digital), '
-            . '"outro" (qualquer outra coisa).\n'
-            . 'Use "outro" quando nao tiver certeza. Nao invente.';
+            . "Valores possíveis para 'tipo':\n"
+            . "- 'fatura_agua': fatura da CESAN / conta de água\n"
+            . "- 'fatura_energia': fatura de luz / EDP\n"
+            . "- 'h1': hidrômetro com etiqueta, marcação, fita ou anotação '01', '1', 'H1' ou 'Casa 1'\n"
+            . "- 'h2': hidrômetro com etiqueta, marcação, fita ou anotação '02', '2', 'H2' ou 'Casa 2'\n"
+            . "- 'h3': hidrômetro com etiqueta, marcação, fita ou anotação '03', '3', 'H3' ou 'Casa 3'\n"
+            . "- 'hidrometro': hidrômetro analógico de água sem NENHUMA identificação de casa visível\n"
+            . "- 'relogio': relógio interno, medidor digital/analógico de energia (ex: Nansen Lumen, display digital de kWh, watímetro)\n"
+            . "- 'outro': qualquer outra coisa não relacionada.\n\n"
+            . "Atenção especial: olhe atentamente para números anotados na carcaça, visor, tampa ou fita adesiva do hidrômetro antes de escolher 'hidrometro'.";
 
         $corpo = json_encode([
             'contents' => [['parts' => [
@@ -206,6 +207,8 @@ class Ocr
             'h3' => ['h3', 'o hidrômetro H3 (Casa 3)'],
             'fatura_energia' => ['fatura_energia', 'a fatura de energia'],
             'relogio' => ['interno', 'o relógio interno'],
+            'watimetro' => ['interno', 'o watímetro'],
+            'interno' => ['interno', 'o relógio interno'],
             'hidrometro' => ['hidrometro', 'um hidrômetro'],
         ];
 
@@ -217,6 +220,121 @@ class Ocr
             return ['ok' => false, 'papel' => 'hidrometro', 'rotulo' => $mapa[$tipo][1]];
         }
         return ['ok' => true, 'papel' => $mapa[$tipo][0], 'rotulo' => $mapa[$tipo][1]];
+    }
+
+    /**
+     * Classifica todas as fotos de um álbum em uma única chamada de IA.
+     *
+     * Identifica em conjunto o que é fatura e o que é medidor individual (H1, H2, H3,
+     * interno), garantindo que as imagens recebam papéis consistentes sem repetições.
+     *
+     * @param array $fotos lista de ['papel' => ?string, 'data' => base64, 'mimeType' => string, 'legenda' => string]
+     * @return array fotos atualizadas com o campo 'papel' preenchido
+     */
+    public static function classificarAlbum(array $fotos): array
+    {
+        $chave = self::chaveGemini();
+        if ($chave === null || !$fotos) {
+            return $fotos;
+        }
+
+        $prompt = "Você é o assistente de um condomínio brasileiro que processa faturas e medidores.\n"
+            . "O usuário enviou um conjunto de imagens juntas em um álbum.\n"
+            . "Sua tarefa é analisar TODAS as imagens e identificar o papel de CADA UMA (IMAGEM 1, IMAGEM 2, etc.):\n\n"
+            . "Papéis possíveis:\n"
+            . "- \"fatura\": Fatura da CESAN (conta de água com consumo em m³, código de barras, logo CESAN)\n"
+            . "- \"fatura_energia\": Fatura da EDP (conta de luz / energia elétrica com consumo em kWh, logo EDP)\n"
+            . "- \"h1\": Hidrômetro da Casa 1 (medidor de água redondo com roletes pretos/vermelhos e indicação 01, 1, H1 ou Casa 1)\n"
+            . "- \"h2\": Hidrômetro da Casa 2 (medidor de água redondo com indicação 02, 2, H2 ou Casa 2)\n"
+            . "- \"h3\": Hidrômetro da Casa 3 (medidor de água redondo com indicação 03, 3, H3 ou Casa 3)\n"
+            . "- \"interno\": Relógio interno, watímetro digital ou submedidor de energia (ex: display LCD de kWh, Nansen Lumen)\n"
+            . "- \"hidrometro\": Hidrômetro de água sem identificação visível de qual casa pertence\n"
+            . "- \"outro\": Imagem não relacionada\n\n"
+            . "Regras para identificar os hidrômetros (Casa 1, Casa 2, Casa 3):\n"
+            . "- Procure atentamente nos hidrômetros por adesivos, fita crepe, etiquetas ou anotações na carcaça/tampa com '01', '02', '03' ou '1', '2', '3'.\n"
+            . "- Se houver 3 hidrômetros de água e algum não tiver etiqueta legível, deduza logicamente para preencher h1, h2 e h3 sem duplicar.\n\n"
+            . "Retorne APENAS um JSON no formato:\n"
+            . "{\n"
+            . "  \"tipo_geral\": \"agua\" | \"energia\" | \"outro\",\n"
+            . "  \"imagens\": [\n"
+            . "    {\"indice\": 1, \"papel\": \"fatura\"},\n"
+            . "    {\"indice\": 2, \"papel\": \"h1\"}\n"
+            . "  ]\n"
+            . "}";
+
+        $parts = [['text' => $prompt]];
+        $n = 1;
+        foreach ($fotos as $f) {
+            $parts[] = ['text' => "IMAGEM {$n}:"];
+            $parts[] = ['inlineData' => ['mimeType' => $f['mimeType'], 'data' => $f['data']]];
+            $n++;
+        }
+
+        $corpo = json_encode([
+            'contents' => [['parts' => $parts]],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
+                'temperature' => 0,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $r = Gemini::gerarJson($chave, $corpo);
+        if (!$r['ok']) {
+            return $fotos;
+        }
+
+        $json = self::parsearJson(Gemini::textoDoResultado($r['data']));
+        if (!$json || empty($json['imagens']) || !is_array($json['imagens'])) {
+            return $fotos;
+        }
+
+        $mapaPapeis = [
+            'fatura_agua' => 'fatura',
+            'fatura_cesan' => 'fatura',
+            'conta_agua' => 'fatura',
+            'fatura' => 'fatura',
+            'fatura_energia' => 'fatura_energia',
+            'fatura_edp' => 'fatura_energia',
+            'conta_energia' => 'fatura_energia',
+            'h1' => 'h1',
+            'h2' => 'h2',
+            'h3' => 'h3',
+            'interno' => 'interno',
+            'relogio' => 'interno',
+            'watimetro' => 'interno',
+            'whatimetro' => 'interno',
+            'submedidor' => 'interno',
+        ];
+
+        $classificados = [];
+        foreach ($json['imagens'] as $i => $item) {
+            $idx = isset($item['indice']) ? ((int) $item['indice']) - 1 : $i;
+            $papelBruto = strtolower((string) ($item['papel'] ?? ''));
+            $papelMapeado = $mapaPapeis[$papelBruto] ?? null;
+            if ($papelMapeado !== null) {
+                $classificados[$idx] = $papelMapeado;
+            }
+        }
+
+        // Se houver hidrômetros sem número explícito, distribui entre h1, h2, h3 disponíveis
+        $papeisUsados = array_values($classificados);
+        $hidrosDisponiveis = array_values(array_diff(['h1', 'h2', 'h3'], $papeisUsados));
+
+        foreach ($fotos as $idx => $f) {
+            if (!empty($f['papel'])) {
+                continue; // preserva papel que veio de legenda
+            }
+            if (isset($classificados[$idx])) {
+                $fotos[$idx]['papel'] = $classificados[$idx];
+            } else {
+                $itemBruto = strtolower((string) ($json['imagens'][$idx]['papel'] ?? ''));
+                if ($itemBruto === 'hidrometro' && !empty($hidrosDisponiveis)) {
+                    $fotos[$idx]['papel'] = array_shift($hidrosDisponiveis);
+                }
+            }
+        }
+
+        return $fotos;
     }
 
     /**
