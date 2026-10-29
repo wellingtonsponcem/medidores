@@ -26,6 +26,7 @@ const ALBUM_PASSO_MS = 600;
 /** Menu publicado no Telegram pelo scripts/telegram-setup.mjs. */
 const COMANDOS = [
     '/resumo' => 'Água e energia do último mês',
+    '/mensagens' => 'Mensagens individuais dos moradores para copiar',
     '/agua' => 'Rateio detalhado da água (CESAN)',
     '/energia' => 'Rateio detalhado da energia',
     '/ultimo' => 'Últimas leituras brutas',
@@ -261,6 +262,11 @@ function aoComando(int $chatId, array $m, string $texto): void
             cmdResumo($chatId);
             return;
 
+        case 'mensagens':
+        case 'msg':
+            cmdMensagens($chatId);
+            return;
+
         case 'agua':
             cmdAgua($chatId);
             return;
@@ -449,6 +455,43 @@ function cmdCompartilhar(int $chatId): void
         Banco::ultimoRateioEnergia('rua_inhambu'),
         Banco::nomesPorPerfil()
     ) . "\n\n_Com copiar e colar você manda por WhatsApp._");
+}
+
+function cmdMensagens(int $chatId): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, 'Apenas administradores podem solicitar as mensagens individuais de todos os moradores.');
+        return;
+    }
+    $nomes = Banco::nomesPorPerfil();
+    $agua = Banco::ultimoRateioAgua();
+    $enviou = false;
+    if ($agua) {
+        $separadasAgua = resp_mensagens_separadas_agua($agua, $nomes);
+        foreach ($separadasAgua as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    $energiaInhambu = Banco::ultimoRateioEnergia('rua_inhambu');
+    if ($energiaInhambu) {
+        $separadasInhambu = resp_mensagens_separadas_energia($energiaInhambu, $nomes);
+        foreach ($separadasInhambu as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    $energiaAv = Banco::ultimoRateioEnergia('av_brasil');
+    if ($energiaAv) {
+        $separadasAv = resp_mensagens_separadas_energia($energiaAv, $nomes);
+        foreach ($separadasAv as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    if (!$enviou) {
+        Telegram::enviarMensagem($chatId, 'Nenhum rateio recente encontrado no sistema para gerar mensagens.');
+    }
 }
 
 function cmdPendentes(int $chatId): void
@@ -660,6 +703,9 @@ function responderConsulta(int $chatId, string $pergunta, ?string $local = null,
             return;
         case 'compartilhar':
             cmdCompartilhar($chatId);
+            return;
+        case 'mensagens':
+            cmdMensagens($chatId);
             return;
         case 'logo':
             cmdLogo($chatId);
@@ -1256,6 +1302,7 @@ function aoClicarBotao(array $cb): void
         Telegram::enviarMensagem($chatId, $ok);
     }
 
+    $separadas = [];
     if ($p['tipo'] === 'agua') {
         $dadosRateio = [
             'data_leitura' => $d['data'],
@@ -1272,9 +1319,6 @@ function aoClicarBotao(array $cb): void
             'valor_fatura_total' => $r['valor_fatura_total'],
         ];
         $separadas = resp_mensagens_separadas_agua($dadosRateio, $nomes);
-        foreach ($separadas as $msgSeparada) {
-            Telegram::enviarMensagem($chatId, $msgSeparada);
-        }
     } elseif ($p['tipo'] === 'energia') {
         $local = $d['local'] ?? 'rua_inhambu';
         $row = Banco::ultimoRateioEnergia($local);
@@ -1287,27 +1331,29 @@ function aoClicarBotao(array $cb): void
                     $cid = (int) $cL2['chat_id'];
                     Telegram::enviarMensagem($cid, $msgFernando);
                 }
-                // Envia para o admin as mensagens separadas prontas para copiar
-                $separadas = resp_mensagens_separadas_energia($row, $nomes);
-                foreach ($separadas as $msgSeparada) {
-                    Telegram::enviarMensagem($chatId, $msgSeparada);
-                }
-            } else {
-                // Rua Inhambu: mensagens separadas para Mirian (Casa 2) e Casa 1
-                $separadas = resp_mensagens_separadas_energia($row, $nomes);
-                foreach ($separadas as $msgSeparada) {
-                    Telegram::enviarMensagem($chatId, $msgSeparada);
-                }
             }
+            $separadas = resp_mensagens_separadas_energia($row, $nomes);
         }
     }
 
-    // Notifica outros administradores cadastrados (ex: maria ou admin)
+    // Coleta todos os administradores cadastrados (ex: wellington, maria)
     $admins = Banco::chatsPorPerfil('admin');
-    foreach ($admins as $adm) {
-        $admChatId = (int) $adm['chat_id'];
+    $adminChatIds = array_unique(array_filter(array_map(fn($a) => (int) ($a['chat_id'] ?? 0), $admins)));
+    if (!in_array($chatId, $adminChatIds, true)) {
+        $adminChatIds[] = $chatId;
+    }
+
+    // Notifica os outros administradores com o resumo geral
+    foreach ($adminChatIds as $admChatId) {
         if ($admChatId !== $chatId) {
             Telegram::enviarMensagem($admChatId, "📢 *Leitura confirmada no condomínio:*\n\n" . $ok);
+        }
+    }
+
+    // Dispara para TODOS os administradores as mensagens individuais prontas para copiar
+    foreach ($adminChatIds as $admChatId) {
+        foreach ($separadas as $msgSeparada) {
+            Telegram::enviarMensagem($admChatId, $msgSeparada);
         }
     }
 }

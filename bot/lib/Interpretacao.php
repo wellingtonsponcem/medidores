@@ -86,6 +86,9 @@ class Interpretacao
         if (preg_match('/\b(compartilhar|copiar|whatsapp|texto)\b/', $t)) {
             return 'compartilhar';
         }
+        if (preg_match('/\b(mensagens|msg|separadas)\b/', $t)) {
+            return 'mensagens';
+        }
         if (preg_match('/\b(logo|logotipo|marca)\b/', $t)) {
             return 'logo';
         }
