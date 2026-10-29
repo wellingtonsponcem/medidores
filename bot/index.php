@@ -841,7 +841,7 @@ function processarAlbum(int $chatId, array $m, array $anexo, string $albumId, ?s
     $stmtMaster = $pdo->prepare(
         'INSERT INTO telegram_album (id, chat_id, mensagem_id, file_id, papel, status, atualizado_em)
          VALUES (:id, :chat, :ts, "", NULL, "recebendo", NOW())
-         ON DUPLICATE KEY UPDATE mensagem_id = :ts, status = IF(status = "processando", status, "recebendo"), atualizado_em = NOW()'
+         ON DUPLICATE KEY UPDATE mensagem_id = VALUES(mensagem_id), status = IF(status = "processando", status, "recebendo"), atualizado_em = NOW()'
     );
     $stmtMaster->execute([
         ':id' => 'master:' . $albumId,
