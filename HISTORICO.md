@@ -34,3 +34,6 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Renderização do logo em PNG de alta resolução (fundo transparente) e JPG (fundo branco) a partir do SVG; comando `/logo` e `/senha`.
   - Correção na identificação de fotos em álbum no Telegram: classificação conjunta via `Ocr::classificarAlbum`, lock atômico por álbum (`master:<id>`) imune a divergência de timezone e fim das mensagens duplicadas de erro.
   - Cobertura expandida para 353 verificações 100% aprovadas. Deploy na Hostinger com purga de cache.
+- **2026-10-29**:
+  - Lançamento oficial da fatura CESAN ref. 10/2026 (R$ 493,78 / 30 m³) e hidrômetros H1: 507, H2: 295, H3: 195.
+  - Correção no prepared statement nativo do coordenador de álbuns (`VALUES(mensagem_id)`). Rateio e mensagens individuais por morador entregues.
