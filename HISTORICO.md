@@ -39,4 +39,5 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Broadcast automático de rateio e mensagens individuais por morador (WhatsApp) para todos os admins cadastrados (Wellington e Maria) e novo comando `/mensagens`.
 - **2026-11-04**:
   - Calibração de OCR para fatura EDP e watímetro Nansen Lumen MD (display 5 dígitos, 05202 -> 5202 e consumo 282 kWh).
-  - Cascata resiliente no Gemini contra sobrecarga/spikes (fallback em 429, 500 e 503) e compatibilidade de chaves em `resp_mensagens_separadas_energia`. 354 verificações 100% aprovadas.
+  - Cascata resiliente no Gemini contra sobrecarga/spikes e padronização completa das mensagens individuais da Casa 1 e Casa 2.
+  - Lançamento oficial de energia Rua Inhambu ref. 11/2026 (fatura R$ 332,93 / 282 kWh; Mirian R$ 216,05 / 183 kWh; Rose R$ 116,88 / 99 kWh) gravado em produção e disparado aos administradores via Telegram. 354 verificações 100% aprovadas.
