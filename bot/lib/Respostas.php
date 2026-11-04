@@ -350,9 +350,14 @@ function resp_mensagens_separadas_energia(array $row, array $nomes): array
             . "• Valor a pagar: *" . fmt_moeda($row['valor_casa_2'] ?? ($row['valor_interno'] ?? 0)) . "*\n\n"
             . "Acesse seu painel completo: " . SITE_URL;
 
-        // Mensagem Casa 1 (Residual / Wellington)
-        $msgs[] = "⚡ *Energia Novo Horizonte — {$c1} (Residual)* — ref. {$ref}\n\n"
-            . "• Consumo: " . fmt_num($row['consumo_casa_1'] ?? ($row['consumo_externo'] ?? 0), 2) . " kWh\n"
+        // Mensagem Casa 1 (Residual / Rose)
+        $msgs[] = "Olá, *{$c1}*! Segue a sua conta de energia referente ao mês de *{$ref}*:\n\n"
+            . "⚡ *Detalhamento da Energia — Novo Horizonte*\n"
+            . "• Consumo Total da Fatura (EDP): " . fmt_num($total, 2) . " kWh\n"
+            . "• Valor Total da Fatura EDP: " . fmt_moeda($fatura) . "\n"
+            . "• Custo do kWh: " . fmt_moeda($vkwh) . " / kWh\n\n"
+            . "📊 *Seu Consumo (Casa 1 — Residual):*\n"
+            . "• Consumo do Mês: " . fmt_num($row['consumo_casa_1'] ?? ($row['consumo_externo'] ?? 0), 2) . " kWh\n"
             . "• Valor a pagar: *" . fmt_moeda($row['valor_casa_1'] ?? ($row['valor_externo'] ?? 0)) . "*\n\n"
             . "Acesse seu painel completo: " . SITE_URL;
     }
