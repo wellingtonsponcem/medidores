@@ -36,5 +36,7 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Cobertura expandida para 353 verificações 100% aprovadas. Deploy na Hostinger com purga de cache.
 - **2026-10-29**:
   - Lançamento oficial da fatura CESAN ref. 10/2026 (R$ 493,78 / 30 m³) e hidrômetros H1: 507, H2: 295, H3: 195.
-  - Correção no prepared statement nativo do coordenador de álbuns (`VALUES(mensagem_id)`).
-  - Broadcast automático de rateio e mensagens individuais por morador (WhatsApp) para todos os admins cadastrados (Wellington e Maria) e novo comando `/mensagens`. 354 verificações 100% aprovadas.
+  - Broadcast automático de rateio e mensagens individuais por morador (WhatsApp) para todos os admins cadastrados (Wellington e Maria) e novo comando `/mensagens`.
+- **2026-11-04**:
+  - Calibração de OCR para fatura EDP e watímetro Nansen Lumen MD (display 5 dígitos, 05202 -> 5202 e consumo 282 kWh).
+  - Cascata resiliente no Gemini contra sobrecarga/spikes (fallback em 429, 500 e 503) e compatibilidade de chaves em `resp_mensagens_separadas_energia`. 354 verificações 100% aprovadas.

@@ -489,13 +489,13 @@ class Banco
 
     public static function obterSegredo(string $nome): ?string
     {
-        self::garantirTabelas();
         try {
+            self::garantirTabelas();
             $stmt = self::pdo()->prepare('SELECT value FROM app_secrets WHERE name = :n LIMIT 1');
             $stmt->execute([':n' => $nome]);
             $row = $stmt->fetch();
             return $row ? (string) $row['value'] : null;
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             return null;
         }
     }

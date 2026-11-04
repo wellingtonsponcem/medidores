@@ -419,21 +419,26 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     /** Prompt da energia — a ordem e o texto mudam conforme o medidor. */
     private static function promptEnergia(array $fotos, bool $avBrasil): string
     {
-        $prompt = "Você é um robô de leitura de medidores. Analise IMAGEM por IMAGEM estritamente nas regras abaixo e retorne APENAS um JSON limpo:\n\n";
+        $prompt = "Você é um robô de leitura de medidores e faturas de energia. Analise IMAGEM por IMAGEM estritamente nas regras abaixo e retorne APENAS um JSON limpo:\n\n";
         $formato = [];
         $n = 1;
 
         foreach ($fotos as $f) {
             $papel = $f['papel'] ?? '';
             if ($papel === 'fatura' || $papel === 'fatura_energia') {
-                $prompt .= "IMAGEM {$n} [Fatura EDP]: Extraia 'faturaTotal' (valor total a pagar). Extraia o consumo total em kWh faturado e salve em 'leituraPadrao'. Verifique o endereço/UC da fatura: se for Avenida Brasil/Praia de Carapebus salve 'av_brasil' em 'local'; se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu' em 'local'. Extraia a data da leitura atual ('AAAA-MM-DD') e salve em 'dataLeitura'.\n";
+                $prompt .= "IMAGEM {$n} [Fatura EDP]:\n"
+                    . "- 'faturaTotal': Extraia o valor total a pagar em Reais (ex: no campo 'Total a Pagar').\n"
+                    . "- 'leituraPadrao': Extraia o consumo total de energia em kWh faturado. Na seção 'EQUIPAMENTOS', confira 'Leitura Atual' menos 'Leitura Anterior' (ex: 6915 - 6633 = 282 kWh) ou verifique na tabela 'HIST. CONSUMO' no mês atual. Tenha atenção redobrada para não confundir o dígito 8 com 9 (ex: 282 e não 292). NUNCA use valores em Reais da 'COMPOSIÇÃO CONSUMO' (ex: 297,65 é valor financeiro em R$, NÃO é consumo!).\n"
+                    . "- 'dataLeitura': Extraia a data da leitura ATUAL da fatura (procure em 'Datas de Leituras' na coluna 'Leitura atual', formato AAAA-MM-DD, ex: 04/11/2026 vira '2026-11-04'). NUNCA use a data da leitura anterior.\n"
+                    . "- 'local': Verifique o endereço/UC. Se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu'; se for Avenida Brasil/Praia de Carapebus salve 'av_brasil'.\n";
                 $formato['faturaTotal'] = 200.50;
-                $formato['leituraPadrao'] = 2500;
+                $formato['leituraPadrao'] = 250;
                 $formato['local'] = $avBrasil ? 'av_brasil' : 'rua_inhambu';
-                $formato['dataLeitura'] = '2026-10-05';
+                $formato['dataLeitura'] = '2026-11-04';
             } elseif ($papel === 'interno') {
-                $prompt .= "IMAGEM {$n} [Relógio/Submedidor Interno]: Extraia o número da leitura em kWh exibido no DISPLAY DIGITAL LCD (ex: 4651, 4815, 5019) ou o valor 'Total Ele' no app Tuya. NUNCA use o número de série/código de barras gravado no plástico do medidor (ex: 48299884). Salve o número do display em 'leituraInterno'.\n";
-                $formato['leituraInterno'] = 3500;
+                $prompt .= "IMAGEM {$n} [Relógio/Submedidor Interno]:\n"
+                    . "- 'leituraInterno': Extraia TODOS os dígitos numéricos inteiros do display digital LCD (ex: se o display mostra '05202', salve 5202; se mostra '5019', salve 5019). O medidor Nansen Lumen MD NÃO tem casas decimais no display LCD. NUNCA use o número de série/código de barras gravado no plástico da carcaça (ex: 48299884). Se for app Tuya, extraia o valor do campo 'Total Ele'.\n";
+                $formato['leituraInterno'] = 5000;
             }
             $n++;
         }
