@@ -43,4 +43,4 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Lançamento oficial de energia Rua Inhambu ref. 11/2026 (fatura R$ 332,93 / 282 kWh; Mirian R$ 216,05; Rose R$ 116,88) gravado e disparado via Telegram.
   - Auditoria e recuperação histórica da telemetria Tuya Cloud (569 eventos de telemetria) para extração da leitura de 04/11 14:00 (6.377,70 kWh).
   - Registro da leitura do watímetro Nansen do Fernando ref. 10/2026 (2.830 kWh) e definição da referência para 11/2026.
-  - Lançamento oficial de energia Av. Brasil ref. 11/2026 (fatura R$ 1.521,88 / 1.363 kWh; Graça R$ 879,84 / 787,99 kWh; Fernando R$ 642,04 / 575,01 kWh) gravado no MySQL e disparado com sucesso via Telegram aos administradores.
+  - Lançamento oficial de energia Av. Brasil ref. 11/2026 gravado e atualizado com o watímetro Nansen medido do Fernando (3.414 kWh, consumo 584,00 kWh / R$ 652,07; Graça Tuya 787,99 kWh / R$ 879,84) e disparado com sucesso via Telegram aos administradores.
