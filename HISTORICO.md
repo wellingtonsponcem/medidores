@@ -37,7 +37,10 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
 - **2026-10-29**:
   - Lançamento oficial da fatura CESAN ref. 10/2026 (R$ 493,78 / 30 m³) e hidrômetros H1: 507, H2: 295, H3: 195.
   - Broadcast automático de rateio e mensagens individuais por morador (WhatsApp) para todos os admins cadastrados (Wellington e Maria) e novo comando `/mensagens`.
-- **2026-11-04**:
+- **2026-11-04 e 2026-11-05**:
   - Calibração de OCR para fatura EDP e watímetro Nansen Lumen MD (display 5 dígitos, 05202 -> 5202 e consumo 282 kWh).
   - Cascata resiliente no Gemini contra sobrecarga/spikes e padronização completa das mensagens individuais da Casa 1 e Casa 2.
-  - Lançamento oficial de energia Rua Inhambu ref. 11/2026 (fatura R$ 332,93 / 282 kWh; Mirian R$ 216,05 / 183 kWh; Rose R$ 116,88 / 99 kWh) gravado em produção e disparado aos administradores via Telegram. 354 verificações 100% aprovadas.
+  - Lançamento oficial de energia Rua Inhambu ref. 11/2026 (fatura R$ 332,93 / 282 kWh; Mirian R$ 216,05; Rose R$ 116,88) gravado e disparado via Telegram.
+  - Auditoria e recuperação histórica da telemetria Tuya Cloud (569 eventos de telemetria) para extração da leitura de 04/11 14:00 (6.377,70 kWh).
+  - Registro da leitura do watímetro Nansen do Fernando ref. 10/2026 (2.830 kWh) e definição da referência para 11/2026.
+  - Lançamento oficial de energia Av. Brasil ref. 11/2026 (fatura R$ 1.521,88 / 1.363 kWh; Graça R$ 879,84 / 787,99 kWh; Fernando R$ 642,04 / 575,01 kWh) gravado no MySQL e disparado com sucesso via Telegram aos administradores.
