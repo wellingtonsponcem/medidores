@@ -88,6 +88,16 @@ function resp_agua(array $row, array $nomes, ?string $perfil = null): string
     return $s;
 }
 
+/** Linha da parte fixa (iluminação pública) dividida igualmente — vazia quando não há. */
+function resp_linha_fixo(array $row): string
+{
+    $fixo = (float) ($row['valor_dividido_igual'] ?? ($row['valor_fixo'] ?? 0));
+    if ($fixo <= 0) {
+        return '';
+    }
+    return 'Iluminação pública e taxas fixas: ' . fmt_moeda($fixo) . ' (' . fmt_moeda($fixo / 2) . " para cada casa)\n";
+}
+
 function resp_energia(array $row, array $nomes, ?string $perfil = null): string
 {
     $cfg = energia_config($row['local_medidor'] ?? 'rua_inhambu');
@@ -101,6 +111,7 @@ function resp_energia(array $row, array $nomes, ?string $perfil = null): string
     if ($perfil !== null && $perfil !== 'admin') {
         $s = "⚡ *Energia — {$cfg['rotulo']}* — ref. {$ref}\n\n";
         $s .= 'Consumo total: ' . fmt_num($row['consumo_total_edp'] ?? 0, 2) . " kWh\n";
+        $s .= resp_linha_fixo($row);
         $s .= 'Valor do kWh: ' . fmt_moeda($vkwh) . "\n\n";
         if ($perfil === 'casa1') {
             $s .= "*Sua unidade (Casa 1 — {$c1})*\n"
@@ -128,6 +139,7 @@ function resp_energia(array $row, array $nomes, ?string $perfil = null): string
     $s = "⚡ *Rateio de Energia — {$cfg['rotulo']}* — ref. {$ref}\n\n";
     $s .= 'Consumo total: ' . fmt_num($row['consumo_total_edp'] ?? 0, 2) . " kWh\n";
     $s .= 'Fatura: ' . fmt_moeda($row['valor_fatura_total'] ?? 0) . "\n";
+    $s .= resp_linha_fixo($row);
     $s .= 'Valor do kWh: ' . fmt_moeda($vkwh) . "\n\n";
     $s .= "• {$cfg['interno_rotulo']}: " . fmt_num($row['consumo_casa_2'] ?? 0, 2) . ' kWh → *' . fmt_moeda($row['valor_casa_2'] ?? 0) . "*\n";
     $s .= "• {$cfg['externo_rotulo']}: " . fmt_num($row['consumo_casa_1'] ?? 0, 2) . ' kWh → *' . fmt_moeda($row['valor_casa_1'] ?? 0) . "*\n";
@@ -376,26 +388,36 @@ function resp_mensagens_separadas_energia(array $row, array $nomes): array
         $c1 = $nomes['casa1'] ?? 'Casa 1';
         $c2 = $nomes['casa2'] ?? 'Casa 2';
 
-        // Mensagem da Casa 2 (Submedidor Nansen) — o nome vem do cadastro
-        $msgs[] = "Olá, *{$c2}*! Segue a sua conta de energia referente ao mês de *{$ref}*:\n\n"
-            . "⚡ *Detalhamento da Energia — Novo Horizonte*\n"
+        $fixo = (float) ($row['valor_dividido_igual'] ?? ($row['valor_fixo'] ?? 0));
+        $cabecalho = "⚡ *Detalhamento da Energia — Novo Horizonte*\n"
             . "• Consumo Total da Fatura (EDP): " . fmt_num($total, 2) . " kWh\n"
             . "• Valor Total da Fatura EDP: " . fmt_moeda($fatura) . "\n"
-            . "• Custo do kWh: " . fmt_moeda($vkwh) . " / kWh\n\n"
+            . ($fixo > 0
+                ? "• Iluminação pública e taxas fixas: " . fmt_moeda($fixo) . " (metade para cada casa)\n"
+                    . "• Custo do kWh (sem a parte fixa): " . fmt_moeda($vkwh) . " / kWh\n\n"
+                : "• Custo do kWh: " . fmt_moeda($vkwh) . " / kWh\n\n");
+        $detalhe = function (float $kwh, float $valor) use ($fixo, $vkwh): string {
+            if ($fixo <= 0) {
+                return "• Consumo do Mês: " . fmt_num($kwh, 2) . " kWh\n"
+                    . "• Valor a pagar: *" . fmt_moeda($valor) . "*\n\n";
+            }
+            return "• Consumo do Mês: " . fmt_num($kwh, 2) . " kWh → " . fmt_moeda($kwh * $vkwh) . "\n"
+                . "• Metade da parte fixa: " . fmt_moeda($fixo / 2) . "\n"
+                . "• Valor a pagar: *" . fmt_moeda($valor) . "*\n\n";
+        };
+
+        // Mensagem da Casa 2 (Submedidor Nansen) — o nome vem do cadastro
+        $msgs[] = "Olá, *{$c2}*! Segue a sua conta de energia referente ao mês de *{$ref}*:\n\n"
+            . $cabecalho
             . "📊 *Seu Consumo (Submedidor Casa 2):*\n"
-            . "• Consumo do Mês: " . fmt_num($row['consumo_casa_2'] ?? ($row['consumo_interno'] ?? 0), 2) . " kWh\n"
-            . "• Valor a pagar: *" . fmt_moeda($row['valor_casa_2'] ?? ($row['valor_interno'] ?? 0)) . "*\n\n"
+            . $detalhe((float) ($row['consumo_casa_2'] ?? ($row['consumo_interno'] ?? 0)), (float) ($row['valor_casa_2'] ?? ($row['valor_interno'] ?? 0)))
             . "Acesse seu painel completo: " . SITE_URL;
 
         // Mensagem Casa 1 (Residual / Rose)
         $msgs[] = "Olá, *{$c1}*! Segue a sua conta de energia referente ao mês de *{$ref}*:\n\n"
-            . "⚡ *Detalhamento da Energia — Novo Horizonte*\n"
-            . "• Consumo Total da Fatura (EDP): " . fmt_num($total, 2) . " kWh\n"
-            . "• Valor Total da Fatura EDP: " . fmt_moeda($fatura) . "\n"
-            . "• Custo do kWh: " . fmt_moeda($vkwh) . " / kWh\n\n"
+            . $cabecalho
             . "📊 *Seu Consumo (Casa 1 — Residual):*\n"
-            . "• Consumo do Mês: " . fmt_num($row['consumo_casa_1'] ?? ($row['consumo_externo'] ?? 0), 2) . " kWh\n"
-            . "• Valor a pagar: *" . fmt_moeda($row['valor_casa_1'] ?? ($row['valor_externo'] ?? 0)) . "*\n\n"
+            . $detalhe((float) ($row['consumo_casa_1'] ?? ($row['consumo_externo'] ?? 0)), (float) ($row['valor_casa_1'] ?? ($row['valor_externo'] ?? 0)))
             . "Acesse seu painel completo: " . SITE_URL;
     }
 

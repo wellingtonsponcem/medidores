@@ -24,6 +24,9 @@ function energia_config(string $local): array
             'externo_rotulo' => 'Casa 1',
             'usa_segundo_medidor' => false,
             'usa_ref_anterior' => false,
+            // iluminação pública (e multa/juros) é da conta, não do consumo:
+            // divide igual entre as duas casas; o resto vai por kWh
+            'divide_fixo' => true,
         ],
         'av_brasil' => [
             'local' => 'av_brasil',
@@ -32,6 +35,7 @@ function energia_config(string $local): array
             'externo_rotulo' => 'Loja 02',
             'usa_segundo_medidor' => true,
             'usa_ref_anterior' => true,
+            'divide_fixo' => false,
         ],
     ];
     return $base[$local] ?? $base['rua_inhambu'];
@@ -108,7 +112,11 @@ function rateio_agua(array $atual, array $anterior): array
  * mesma regra da view, que é assim porque o que a concessionária fatura é o
  * total, e não a soma dos dois relógios.
  *
- * @param array $atual padrao (consumo total da fatura), interno, interno2 (null quando não medido), fatura
+ * Na Rua Inhambu, a parte fixa da conta (iluminação pública, multa e juros —
+ * 'fixo') é dividida igualmente entre as duas casas, e só o restante vira preço
+ * do kWh. Sem 'fixo' (contas antigas, Av. Brasil), tudo vai por kWh como antes.
+ *
+ * @param array $atual padrao (consumo total da fatura), interno, interno2 (null quando não medido), fatura, fixo
  * @param array $anterior interno_ref, interno2_ref (null quando não há referência gravada)
  */
 function rateio_energia(array $atual, array $anterior, string $local = 'rua_inhambu'): array
@@ -121,8 +129,10 @@ function rateio_energia(array $atual, array $anterior, string $local = 'rua_inha
     $leituraAtual2 = isset($atual['interno2']) && $atual['interno2'] !== null ? (float) $atual['interno2'] : null;
     $leituraAnterior2 = isset($anterior['interno2_ref']) && $anterior['interno2_ref'] !== null ? (float) $anterior['interno2_ref'] : null;
     $fatura = (float) ($atual['fatura'] ?? 0);
+    $fixo = !empty($cfg['divide_fixo']) ? min($fatura, max(0.0, (float) ($atual['fixo'] ?? 0))) : 0.0;
+    $fixoPorUnidade = $fixo / 2;
 
-    $valorKwh = $totalConsumo > 0 ? $fatura / $totalConsumo : 0.0;
+    $valorKwh = $totalConsumo > 0 ? ($fatura - $fixo) / $totalConsumo : 0.0;
     $consumoInterno = max(0, $leituraAtual - $leituraAnterior);
 
     $medido = $leituraAtual2 !== null && $leituraAnterior2 !== null;
@@ -146,8 +156,10 @@ function rateio_energia(array $atual, array $anterior, string $local = 'rua_inha
         // diferença entre o total faturado e a soma dos dois relógios (luz comum/perda)
         'diferenca' => (float) ($totalConsumo - ($consumoInterno + $consumoExterno)),
         'valor_kwh' => (float) $valorKwh,
-        'valor_interno' => (float) ($consumoInterno * $valorKwh),
-        'valor_externo' => (float) ($consumoExterno * $valorKwh),
+        'valor_fixo' => (float) $fixo,
+        'fixo_por_unidade' => (float) $fixoPorUnidade,
+        'valor_interno' => (float) ($consumoInterno * $valorKwh + $fixoPorUnidade),
+        'valor_externo' => (float) ($consumoExterno * $valorKwh + $fixoPorUnidade),
         'valor_fatura_total' => $fatura,
     ];
 }
@@ -199,6 +211,10 @@ function conferir_energia(array $atual, array $anterior, array $rateio): array
     }
     if ((float) ($atual['fatura'] ?? 0) <= 0) {
         $avisos[] = 'Valor da fatura zerado — o rateio vai sair em R$ 0,00.';
+    }
+    if (!empty(energia_config($rateio['local'] ?? 'rua_inhambu')['divide_fixo']) && (float) ($atual['fixo'] ?? 0) <= 0) {
+        $avisos[] = 'Não li a iluminação pública da fatura — sem ela, a conta toda é dividida pelo consumo. '
+            . 'Para corrigir, digite por exemplo: `energia padrao 282 fatura 332,93 iluminacao 34,98`.';
     }
     if ($rateio['medido'] && $rateio['consumo_externo'] <= 0) {
         $avisos[] = 'Consumo do ' . $rateio['externo_rotulo'] . ' ficou em zero — confira as leituras dos dois relógios.';

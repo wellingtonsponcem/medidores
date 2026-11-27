@@ -72,6 +72,8 @@ function syncEnergyContextUI() {
   if (select) select.value = state.energyMeter;
   if (th1) th1.textContent = cfg.col1;
   if (th2) th2.textContent = cfg.col2;
+  const fixoWrap = document.getElementById('en-fixo-wrap');
+  if (fixoWrap) fixoWrap.classList.toggle('hidden', !(state.currentTab === 'energia' && state.energyMeter === 'rua_inhambu'));
   if (state.currentTab === 'energia') {
     document.getElementById('target-title').textContent = cfg.title;
     document.getElementById('table-title').textContent = cfg.tableTitle;
@@ -91,7 +93,11 @@ function getEnergyInsertPayload() {
   const leituraAnterior2 = leituraAnterior2Input && leituraAnterior2Input.value !== '' ? Number(leituraAnterior2Input.value) : null;
 
   const valorFatura = Number(document.getElementById('ins-fatura').value || 0);
-  const valorKwh = totalConsumo > 0 ? valorFatura / totalConsumo : 0;
+  // Rua Inhambu: iluminação pública (e multa/juros) divide igual; o resto vai por kWh
+  const valorFixo = state.energyMeter === 'rua_inhambu'
+    ? Math.min(valorFatura, Math.max(0, Number(document.getElementById('ins-en-fixo')?.value || 0)))
+    : 0;
+  const valorKwh = totalConsumo > 0 ? (valorFatura - valorFixo) / totalConsumo : 0;
   
   const consumoInterno = Math.max(0, leituraAtual - leituraAnterior);
   let consumoExterno = 0;
@@ -102,20 +108,24 @@ function getEnergyInsertPayload() {
     consumoExterno = Math.max(0, totalConsumo - consumoInterno);
   }
 
-  return { totalConsumo, leituraAtual, leituraAnterior, leituraAtual2, leituraAnterior2, valorFatura, valorKwh, consumoInterno, consumoExterno };
+  return { totalConsumo, leituraAtual, leituraAnterior, leituraAtual2, leituraAnterior2, valorFatura, valorFixo, valorKwh, consumoInterno, consumoExterno };
 }
 
 function refreshEnergiaPreview() {
   const previewBox = document.getElementById('energia-preview-box');
   const previewContent = document.getElementById('energia-preview-content');
   if (!previewBox || !previewContent) return;
+  const fixoWrap = document.getElementById('en-fixo-wrap');
+  if (fixoWrap) fixoWrap.classList.toggle('hidden', !(state.currentTab === 'energia' && state.energyMeter === 'rua_inhambu'));
+  // na Rua Inhambu a leitura anterior não aparece no formulário: a prévia sairia errada
   if (state.currentTab !== 'energia' || state.energyMeter !== 'av_brasil') {
     previewBox.classList.add('hidden');
     previewContent.innerHTML = '';
     return;
   }
   const cfg = getEnergyConfig();
-  const { totalConsumo, leituraAtual, leituraAnterior, leituraAtual2, leituraAnterior2, valorFatura, valorKwh, consumoInterno, consumoExterno } = getEnergyInsertPayload();
+  const { totalConsumo, leituraAtual, leituraAnterior, leituraAtual2, leituraAnterior2, valorFatura, valorFixo, valorKwh, consumoInterno, consumoExterno } = getEnergyInsertPayload();
+  const metadeFixo = valorFixo / 2;
   if (!totalConsumo && !leituraAtual && !leituraAnterior && !valorFatura) {
     previewBox.classList.add('hidden');
     previewContent.innerHTML = '';
@@ -137,9 +147,10 @@ function refreshEnergiaPreview() {
     <div>${cfg.internalPartyLabel}: <strong>${consumoInterno.toFixed(2)} kWh</strong> ${leituraAtual2 !== null ? `(medido)` : `(residual)`}</div>
     <div>${cfg.externalPartyLabel}: <strong>${consumoExterno.toFixed(2)} kWh</strong> ${leituraAtual2 !== null ? `(medido)` : `(residual)`}</div>
     ${diffInfo}
-    <div class="border-t border-slate-200 my-1 pt-1">Valor/kWh: <strong>${fmtMoney(valorKwh)}</strong></div>
-    <div>${cfg.internalPartyLabel} paga: <strong>${fmtMoney(consumoInterno * valorKwh)}</strong></div>
-    <div>${cfg.externalPartyLabel} paga: <strong>${fmtMoney(consumoExterno * valorKwh)}</strong></div>
+    ${valorFixo > 0 ? `<div class="border-t border-slate-200 my-1 pt-1">Iluminação pública/fixos: <strong>${fmtMoney(valorFixo)}</strong> (${fmtMoney(metadeFixo)} cada)</div>` : ''}
+    <div class="border-t border-slate-200 my-1 pt-1">Valor/kWh${valorFixo > 0 ? ' (sem a parte fixa)' : ''}: <strong>${fmtMoney(valorKwh)}</strong></div>
+    <div>${cfg.internalPartyLabel} paga: <strong>${fmtMoney(consumoInterno * valorKwh + metadeFixo)}</strong></div>
+    <div>${cfg.externalPartyLabel} paga: <strong>${fmtMoney(consumoExterno * valorKwh + metadeFixo)}</strong></div>
   `;
 }
 
@@ -1016,6 +1027,11 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
           : `IMAGEM ${currentImageIndex} [Fatura EDP]: Extraia 'faturaTotal' (o Valor a Pagar float, ex: 200.50). Extraia a Leitura do Mês faturada ou Consumo ativo (número) e salve em 'leituraPadrao'.\n`;
         formatJson.faturaTotal = 200.50;
         formatJson.leituraPadrao = 2500;
+        if (cfg.key === 'rua_inhambu') {
+          prompt_text += `Extraia também 'iluminacaoPublica' (valor em R$ da linha 'Cont. Ilum. Publ.' / CIP; 0 se não houver) e 'multasJuros' (soma em R$ de multa, juros e atualização monetária; 0 se não houver).\n`;
+          formatJson.iluminacaoPublica = 34.98;
+          formatJson.multasJuros = 0;
+        }
         currentImageIndex++;
       }
       if(f2) {
@@ -1164,6 +1180,9 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     } else {
       if(obj.faturaTotal) document.getElementById('ins-fatura').value = obj.faturaTotal;
       if(obj.leituraPadrao) document.getElementById('ins-en-padrao').value = obj.leituraPadrao;
+      if(obj.iluminacaoPublica !== undefined && document.getElementById('ins-en-fixo')) {
+        document.getElementById('ins-en-fixo').value = Number(obj.iluminacaoPublica || 0) + Number(obj.multasJuros || 0);
+      }
       if(obj.leituraInterno) document.getElementById('ins-en-interno').value = obj.leituraInterno;
       refreshEnergiaPreview();
     }
@@ -1335,6 +1354,7 @@ async function initAdmin() {
     }
   });
   document.getElementById('ins-en-padrao')?.addEventListener('input', refreshEnergiaPreview);
+  document.getElementById('ins-en-fixo')?.addEventListener('input', refreshEnergiaPreview);
   document.getElementById('ins-en-interno')?.addEventListener('input', () => { _tuyaManualOverride = true; _fmtSnapshotBadge(_tuyaSnapshotMeta, document.getElementById('ins-en-interno').value); refreshEnergiaPreview(); });
   document.getElementById('ins-en-interno-anterior')?.addEventListener('input', refreshEnergiaPreview);
   document.getElementById('ins-fatura')?.addEventListener('input', () => { refreshEnergiaPreview(); refreshAguaPreview(); });
@@ -1407,7 +1427,8 @@ async function initAdmin() {
           leitura_interno_2: _v2 !== '' ? _v2 : null,
           local_medidor: state.energyMeter,
           leitura_interno_anterior_ref: state.energyMeter === 'av_brasil' ? (document.getElementById('ins-en-interno-anterior').value || 0) : null,
-          leitura_interno_2_anterior_ref: state.energyMeter === 'av_brasil' ? (document.getElementById('ins-en-interno-anterior-2').value || 0) : null
+          leitura_interno_2_anterior_ref: state.energyMeter === 'av_brasil' ? (document.getElementById('ins-en-interno-anterior-2').value || 0) : null,
+          valor_dividido_igual: getEnergyInsertPayload().valorFixo
         };
         const { error } = await supabaseClient.from('consumo_energia').insert(payload);
         if (error) displayAlert("Erro energia: " + error.message);

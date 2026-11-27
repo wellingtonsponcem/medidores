@@ -359,8 +359,9 @@ class Banco
         $id = self::uuid();
         $stmt = self::pdo()->prepare(
             'INSERT INTO consumo_energia (id, data_leitura, leitura_padrao, leitura_interno, leitura_interno_2,
-                 valor_fatura_total, local_medidor, leitura_interno_anterior_ref, leitura_interno_2_anterior_ref)
-             VALUES (:id, :data, :padrao, :interno, :interno2, :fatura, :local, :ref1, :ref2)'
+                 valor_fatura_total, local_medidor, leitura_interno_anterior_ref, leitura_interno_2_anterior_ref,
+                 valor_dividido_igual)
+             VALUES (:id, :data, :padrao, :interno, :interno2, :fatura, :local, :ref1, :ref2, :fixo)'
         );
         $stmt->execute([
             ':id' => $id,
@@ -372,6 +373,7 @@ class Banco
             ':local' => $p['local'],
             ':ref1' => $p['ref1'],
             ':ref2' => $p['ref2'],
+            ':fixo' => (float) ($p['fixo'] ?? 0),
         ]);
         return $id;
     }

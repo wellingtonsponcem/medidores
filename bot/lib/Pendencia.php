@@ -162,7 +162,13 @@ class Pendencia
         $s .= 'Ref. ' . fmt_mes_ref($d['data'] ?? null) . "\n\n";
         $s .= 'Consumo total da fatura: ' . fmt_num($r['consumo_total'], 2) . " kWh\n";
         $s .= 'Valor da fatura: ' . fmt_moeda($r['valor_fatura_total']) . "\n";
-        $s .= 'Valor do kWh: ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        if ($r['valor_fixo'] > 0) {
+            $s .= 'Iluminação pública e taxas fixas: ' . fmt_moeda($r['valor_fixo'])
+                . ' → ' . fmt_moeda($r['fixo_por_unidade']) . " para cada casa\n";
+            $s .= 'Valor do kWh (sem a parte fixa): ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        } else {
+            $s .= 'Valor do kWh: ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        }
 
         $s .= "*Rateio previsto*\n";
         $s .= "• {$r['interno_rotulo']}: " . fmt_num($r['consumo_interno'], 2) . ' kWh → *' . fmt_moeda($r['valor_interno'])
@@ -256,6 +262,7 @@ class Pendencia
                     'local' => $d['local'] ?? 'rua_inhambu',
                     'ref1' => $d['ref1'] ?? null,
                     'ref2' => $d['ref2'] ?? null,
+                    'fixo' => $d['fixo'] ?? 0,
                 ]);
                 return ['ok' => true, 'id' => $id];
             }

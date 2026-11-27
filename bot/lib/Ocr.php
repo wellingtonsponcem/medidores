@@ -430,7 +430,11 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
                     . "- 'faturaTotal': Extraia o valor total a pagar em Reais (ex: no campo 'Total a Pagar').\n"
                     . "- 'leituraPadrao': Extraia o consumo total de energia em kWh faturado. Na seção 'EQUIPAMENTOS', confira 'Leitura Atual' menos 'Leitura Anterior' (ex: 6915 - 6633 = 282 kWh) ou verifique na tabela 'HIST. CONSUMO' no mês atual. Tenha atenção redobrada para não confundir o dígito 8 com 9 (ex: 282 e não 292). NUNCA use valores em Reais da 'COMPOSIÇÃO CONSUMO' (ex: 297,65 é valor financeiro em R$, NÃO é consumo!).\n"
                     . "- 'dataLeitura': Extraia a data da leitura ATUAL da fatura (procure em 'Datas de Leituras' na coluna 'Leitura atual', formato AAAA-MM-DD, ex: 04/11/2026 vira '2026-11-04'). NUNCA use a data da leitura anterior.\n"
-                    . "- 'local': Verifique o endereço/UC. Se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu'; se for Avenida Brasil/Praia de Carapebus salve 'av_brasil'.\n";
+                    . "- 'local': Verifique o endereço/UC. Se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu'; se for Avenida Brasil/Praia de Carapebus salve 'av_brasil'.\n"
+                    . "- 'iluminacaoPublica': No quadro de itens da fatura (Descrição / Valor), o valor em Reais da linha de contribuição de iluminação pública ('Cont. Ilum. Publ.', 'CIP', 'COSIP', 'Contrib. Ilum. Pública'). Ex: 34.98. Se não houver, 0.\n"
+                    . "- 'multasJuros': Soma em Reais das linhas de multa, juros de mora e atualização monetária por atraso, se existirem. NÃO inclua tributos (ICMS, PIS, COFINS), bandeira tarifária, TUSD nem TE. Se não houver, 0.\n";
+                $formato['iluminacaoPublica'] = 34.98;
+                $formato['multasJuros'] = 0;
                 $formato['faturaTotal'] = 200.50;
                 $formato['leituraPadrao'] = 250;
                 $formato['local'] = $avBrasil ? 'av_brasil' : 'rua_inhambu';
@@ -595,6 +599,10 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             'interno' => (float) ($v['leituraInterno'] ?? 0),
             'interno2' => null,
             'fatura' => (float) ($v['faturaTotal'] ?? 0),
+            // só a Rua Inhambu divide a parte fixa (energia_config divide_fixo)
+            'fixo' => $local === 'rua_inhambu'
+                ? round((float) sanitizar_numero($v['iluminacaoPublica'] ?? 0) + (float) sanitizar_numero($v['multasJuros'] ?? 0), 2)
+                : 0.0,
             'ref1' => $ant ? (float) $ant['leitura_interno'] : null,
             'ref2' => null,
             'origem' => 'foto',

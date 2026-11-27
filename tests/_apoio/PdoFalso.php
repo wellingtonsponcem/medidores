@@ -229,6 +229,7 @@ class PdoFalsoStatement
                 'local_medidor' => $params[':local'],
                 'leitura_interno_anterior_ref' => $params[':ref1'],
                 'leitura_interno_2_anterior_ref' => $params[':ref2'],
+                'valor_dividido_igual' => $params[':fixo'],
             ];
             $this->afetadas = 1;
             return true;

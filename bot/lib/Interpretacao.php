@@ -136,6 +136,7 @@ class Interpretacao
             $padrao = self::campo($t, ['padrao', 'consumo', 'total', 'fatura consumo']);
             $interno = self::campo($t, ['interno', 'interna', 'medidor', 'relatorio interno', 'submedidor']);
             $fatura = self::campo($t, ['fatura', 'valor', 'total a pagar']);
+            $fixo = self::campo($t, ['iluminacao publica', 'iluminacao', 'ilum', 'cip', 'fixo']);
 
             if ($padrao === null && $interno === null) {
                 return null;
@@ -158,6 +159,7 @@ class Interpretacao
                     'interno' => $interno !== null ? sanitizar_numero($interno) : 0,
                     'interno2' => null,
                     'fatura' => $fatura !== null ? sanitizar_numero($fatura) : 0,
+                    'fixo' => $fixo !== null && $local === 'rua_inhambu' ? (float) sanitizar_numero($fixo) : 0.0,
                     'ref1' => $ant ? (float) ($ant['leitura_interno_anterior_ref'] ?? $ant['leitura_interno'] ?? 0) : null,
                     'ref2' => null,
                     'origem' => 'texto',
