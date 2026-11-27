@@ -83,9 +83,10 @@ class Convite
 
         $baixa = Banco::pdo()->prepare(
             'UPDATE telegram_convites SET usado_em = :agora, usado_por = :c
-             WHERE codigo_hash = :h AND usado_em IS NULL AND expira_em > :agora'
+             WHERE codigo_hash = :h AND usado_em IS NULL AND expira_em > :limite'
         );
-        $baixa->execute([':agora' => $agoraStr, ':c' => $chatId, ':h' => $hash]);
+        // o MySQL com prepare nativo não aceita o mesmo marcador duas vezes
+        $baixa->execute([':agora' => $agoraStr, ':c' => $chatId, ':h' => $hash, ':limite' => $agoraStr]);
         if ($baixa->rowCount() !== 1) {
             return $invalido;
         }
