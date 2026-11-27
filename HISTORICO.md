@@ -44,3 +44,8 @@ Este arquivo registra o histórico de desenvolvimento deste projeto.
   - Auditoria e recuperação histórica da telemetria Tuya Cloud (569 eventos de telemetria) para extração da leitura de 04/11 14:00 (6.377,70 kWh).
   - Registro da leitura do watímetro Nansen do Fernando ref. 10/2026 (2.830 kWh) e definição da referência para 11/2026.
   - Lançamento oficial de energia Av. Brasil ref. 11/2026 gravado e atualizado com o watímetro Nansen medido do Fernando (3.414 kWh, consumo 584,00 kWh / R$ 652,07; Graça Tuya 787,99 kWh / R$ 879,84) e disparado com sucesso via Telegram aos administradores.
+- **2026-11-27**:
+  - Casa 2 (Rua Inhambu) passa da Mirian para o Wellington a partir da leitura **05210** do submedidor Nansen (27/11/2026). Último rateio da Casa 2 foi em 04/11 com **5202**: a Mirian consumiu **8 kWh** de 04/11 a 27/11, que entram na divisão da fatura de energia de 12/2026 (o restante da Casa 2 é do Wellington). O 5210 é ponto de corte, não foi gravado como última foto do relógio.
+  - Bot: nome da Casa 2 vem do cadastro (sem "Mirian" fixo); fatura da CESAN sozinha agora guarda a leitura e pede os hidrômetros (estado `montando_agua`, 24 h), em vez de lançar H1-H3 zerados. Publicado no servidor via API da Hostinger (6 arquivos do bot).
+  - A fatura CESAN de 27/11 (leitura 1.861 / R$ 407,06), enviada antes da correção, foi religada à leitura em andamento e a pendência zerada (`agua-2689ed989e`) descartada.
+  - Segurança no servidor: `.htaccess` passou a bloquear `env` (entregava a chave do Gemini publicamente), `debug.php`, `migration.php`, `fix-view.php`, `fix-energia-views.php`, saídas `*_output.json`, `test*.js`, `.py`, `.sh`, `.sql` e `.md`. A chave do Gemini precisa ser trocada.
