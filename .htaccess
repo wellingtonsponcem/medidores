@@ -24,4 +24,21 @@
     Require all denied
 </FilesMatch>
 
+# Variáveis sem o ponto: o "env" antigo entregava a chave do Gemini num GET,
+# porque o bloqueio acima só pega nomes começando com ".env".
+<FilesMatch "^(env|medidores\.env)$">
+    Require all denied
+</FilesMatch>
+
+# Scripts de manutenção que rodam no banco a cada GET (migração, recriação de
+# views) ou despejam dados dele. Só fazem sentido rodados de propósito.
+<FilesMatch "^(debug|migration|fix-view|fix-energia-views|scratch_inspect_db)\.php$">
+    Require all denied
+</FilesMatch>
+
+# Saídas de experimento, scripts e documentos do repositório: não são do site.
+<FilesMatch "(^(api_output|energy_output|models)\.json|^test.*\.js|\.(py|sh|sql|md))$">
+    Require all denied
+</FilesMatch>
+
 Options -Indexes

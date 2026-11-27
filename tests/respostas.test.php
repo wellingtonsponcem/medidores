@@ -216,9 +216,11 @@ ok(strpos($msgsAgua[0], 'Hidro 1') !== false, 'mensagem 1 de água é do Hidro 1
 ok(strpos($msgsAgua[1], 'Hidro 2') !== false, 'mensagem 2 de água é do Hidro 2');
 ok(strpos($msgsAgua[2], 'Hidro 3') !== false, 'mensagem 3 de água é do Hidro 3');
 
-$msgsEnergiaInhambu = resp_mensagens_separadas_energia($rowEnergia, ['casa1' => 'Rose', 'casa2' => 'Mirian']);
+$msgsEnergiaInhambu = resp_mensagens_separadas_energia($rowEnergia, ['casa1' => 'Rose', 'casa2' => 'Wellington']);
 igual(count($msgsEnergiaInhambu), 2, 'energia Inhambu gera 2 mensagens separadas');
-ok(strpos($msgsEnergiaInhambu[0], 'Mirian') !== false, 'energia Inhambu tem mensagem da Mirian');
+ok(strpos($msgsEnergiaInhambu[0], 'Olá, *Wellington*') !== false, 'energia Inhambu: Casa 2 sai com o nome do cadastro');
+$semNome = resp_mensagens_separadas_energia($rowEnergia, ['casa1' => 'Rose']);
+ok(strpos($semNome[0], 'Olá, *Casa 2*') !== false && strpos($semNome[0], 'Mirian') === false, 'energia Inhambu: sem morador na Casa 2 não inventa nome antigo');
 ok(strpos($msgsEnergiaInhambu[1], 'Residual') !== false, 'energia Inhambu tem mensagem do Residual');
 
 $msgsEnergiaBrasil = resp_mensagens_separadas_energia($rowAvBrasil, ['casa3' => 'Graca', 'loja2' => 'Fernando']);

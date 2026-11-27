@@ -49,8 +49,8 @@ class Gemini
             $json = json_decode($res['corpo'], true);
             $ultimoErro = is_array($json) ? ($json['error']['message'] ?? $res['corpo']) : $res['corpo'];
 
-            // 404 = modelo não existe mais nesta conta -> tenta o próximo
-            if ($res['status'] !== 404) {
+            // Continua a cascata se o modelo não existe (404), está sobrecarregado (429/503) ou instável (500)
+            if (!in_array($res['status'], [404, 429, 500, 503], true)) {
                 break;
             }
         }

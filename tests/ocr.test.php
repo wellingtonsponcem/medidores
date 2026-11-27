@@ -132,4 +132,111 @@ igual($cls['ok'], false, 'classificar sem chave também falha');
 igual($cls['papel'], null, 'sem chave, não devolve papel nenhum');
 ok(strpos($cls['erro'], 'chave ativa do Gemini') !== false, 'e o mesmo aviso de chave');
 
+// classificarAlbum sem chave devolve as fotos como vieram
+$albumSemChave = Ocr::classificarAlbum([
+    ['papel' => null, 'data' => 'AAAA', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'BBBB', 'mimeType' => 'image/jpeg'],
+]);
+igual($albumSemChave[0]['papel'], null, 'album sem chave mantém papel nulo 1');
+igual($albumSemChave[1]['papel'], null, 'album sem chave mantém papel nulo 2');
+
+// ---- classificarAlbum com mock da IA ----
+$pdo->tabelas['app_secrets']['GEMINI_API_KEY'] = ['name' => 'GEMINI_API_KEY', 'value' => 'chave-teste'];
+
+// Mock da resposta do Gemini para classificação de água
+Http::$transporte = function ($url = null, $opcoes = null) {
+    $resposta = [
+        'candidates' => [
+            [
+                'content' => [
+                    'parts' => [
+                        [
+                            'text' => json_encode([
+                                'tipo_geral' => 'agua',
+                                'imagens' => [
+                                    ['indice' => 1, 'papel' => 'fatura_cesan'],
+                                    ['indice' => 2, 'papel' => 'h1'],
+                                    ['indice' => 3, 'papel' => 'h2'],
+                                    ['indice' => 4, 'papel' => 'h3'],
+                                ],
+                            ]),
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ];
+    return ['status' => 200, 'corpo' => json_encode($resposta)];
+};
+
+$albumAgua = Ocr::classificarAlbum([
+    ['papel' => null, 'data' => 'F1', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F2', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F3', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F4', 'mimeType' => 'image/jpeg'],
+]);
+igual($albumAgua[0]['papel'], 'fatura', 'album água: imagem 1 virou fatura');
+igual($albumAgua[1]['papel'], 'h1', 'album água: imagem 2 virou h1');
+igual($albumAgua[2]['papel'], 'h2', 'album água: imagem 3 virou h2');
+igual($albumAgua[3]['papel'], 'h3', 'album água: imagem 4 virou h3');
+
+// Preserva papel vindo de legenda prévia
+$albumComLegenda = Ocr::classificarAlbum([
+    ['papel' => 'fatura', 'data' => 'F1', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F2', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F3', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F4', 'mimeType' => 'image/jpeg'],
+]);
+igual($albumComLegenda[0]['papel'], 'fatura', 'preserva papel que veio de legenda');
+
+// Hidrômetros genéricos são distribuídos sequencialmente para h1, h2, h3
+Http::$transporte = function () {
+    return ['status' => 200, 'corpo' => json_encode([
+        'candidates' => [[
+            'content' => ['parts' => [['text' => json_encode([
+                'tipo_geral' => 'agua',
+                'imagens' => [
+                    ['indice' => 1, 'papel' => 'fatura'],
+                    ['indice' => 2, 'papel' => 'hidrometro'],
+                    ['indice' => 3, 'papel' => 'hidrometro'],
+                    ['indice' => 4, 'papel' => 'hidrometro'],
+                ],
+            ])]]],
+        ]],
+    ])];
+};
+
+$albumGenerico = Ocr::classificarAlbum([
+    ['papel' => null, 'data' => 'F1', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F2', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F3', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'F4', 'mimeType' => 'image/jpeg'],
+]);
+igual($albumGenerico[0]['papel'], 'fatura', 'hidro genérico: imagem 1 fatura');
+igual($albumGenerico[1]['papel'], 'h1', 'hidro genérico distribuído para h1');
+igual($albumGenerico[2]['papel'], 'h2', 'hidro genérico distribuído para h2');
+igual($albumGenerico[3]['papel'], 'h3', 'hidro genérico distribuído para h3');
+
+// Mock para álbum de energia
+Http::$transporte = function () {
+    return ['status' => 200, 'corpo' => json_encode([
+        'candidates' => [[
+            'content' => ['parts' => [['text' => json_encode([
+                'tipo_geral' => 'energia',
+                'imagens' => [
+                    ['indice' => 1, 'papel' => 'fatura_edp'],
+                    ['indice' => 2, 'papel' => 'watimetro'],
+                ],
+            ])]]],
+        ]],
+    ])];
+};
+
+$albumEnergia = Ocr::classificarAlbum([
+    ['papel' => null, 'data' => 'E1', 'mimeType' => 'image/jpeg'],
+    ['papel' => null, 'data' => 'E2', 'mimeType' => 'image/jpeg'],
+]);
+igual($albumEnergia[0]['papel'], 'fatura_energia', 'album energia: imagem 1 fatura_energia');
+igual($albumEnergia[1]['papel'], 'interno', 'album energia: imagem 2 interno');
+
 encerrarTeste();

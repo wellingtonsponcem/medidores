@@ -86,6 +86,12 @@ class Interpretacao
         if (preg_match('/\b(compartilhar|copiar|whatsapp|texto)\b/', $t)) {
             return 'compartilhar';
         }
+        if (preg_match('/\b(mensagens|msg|separadas)\b/', $t)) {
+            return 'mensagens';
+        }
+        if (preg_match('/\b(logo|logotipo|marca)\b/', $t)) {
+            return 'logo';
+        }
         return null;
     }
 
@@ -130,6 +136,7 @@ class Interpretacao
             $padrao = self::campo($t, ['padrao', 'consumo', 'total', 'fatura consumo']);
             $interno = self::campo($t, ['interno', 'interna', 'medidor', 'relatorio interno', 'submedidor']);
             $fatura = self::campo($t, ['fatura', 'valor', 'total a pagar']);
+            $fixo = self::campo($t, ['iluminacao publica', 'iluminacao', 'ilum', 'cip', 'fixo']);
 
             if ($padrao === null && $interno === null) {
                 return null;
@@ -152,6 +159,7 @@ class Interpretacao
                     'interno' => $interno !== null ? sanitizar_numero($interno) : 0,
                     'interno2' => null,
                     'fatura' => $fatura !== null ? sanitizar_numero($fatura) : 0,
+                    'fixo' => $fixo !== null && $local === 'rua_inhambu' ? (float) sanitizar_numero($fixo) : 0.0,
                     'ref1' => $ant ? (float) ($ant['leitura_interno_anterior_ref'] ?? $ant['leitura_interno'] ?? 0) : null,
                     'ref2' => null,
                     'origem' => 'texto',
@@ -232,7 +240,7 @@ class Interpretacao
             . "Perfis possíveis: admin (gerencia tudo), casa1, casa2, casa3, loja2.\n"
             . "Locais de energia:\n"
             . "- 'av_brasil': Avenida Brasil, Praia de Carapebus, Loja 02, Fernando, Graça\n"
-            . "- 'rua_inhambu': Rua Inhambu, Novo Horizonte, Casa 1, Casa 2, Mirian, Rose, Wellington\n\n"
+            . "- 'rua_inhambu': Rua Inhambu, Novo Horizonte, Casa 1, Casa 2, Rose, Wellington\n\n"
             . "Perfil de quem falou: " . ($perfil ?: 'desconhecido') . "\n\n"
             . "Responda APENAS com o JSON, sem markdown, sem comentário.\n"
             . "Se for consulta de energia, informe em 'local' o imóvel ('av_brasil' ou 'rua_inhambu') caso mencionado.\n"
@@ -247,7 +255,7 @@ class Interpretacao
                     'type' => 'OBJECT',
                     'properties' => [
                         'intencao' => ['type' => 'STRING', 'enum' => ['consulta', 'lancamento', 'conversa']],
-                        'consulta' => ['type' => 'STRING', 'enum' => ['resumo', 'agua', 'energia', 'ultimo', 'compartilhar']],
+                        'consulta' => ['type' => 'STRING', 'enum' => ['resumo', 'agua', 'energia', 'ultimo', 'compartilhar', 'logo']],
                         'local' => ['type' => 'STRING', 'enum' => ['av_brasil', 'rua_inhambu']],
                         'duvida' => ['type' => 'STRING'],
                         'resposta' => ['type' => 'STRING'],

@@ -57,7 +57,8 @@ try {
             local_medidor VARCHAR(50) NOT NULL,
             leitura_interno_anterior_ref DECIMAL(12,4),
             leitura_interno_2 DECIMAL(12,4),
-            leitura_interno_2_anterior_ref DECIMAL(12,4)
+            leitura_interno_2_anterior_ref DECIMAL(12,4),
+            valor_dividido_igual DECIMAL(12,4) NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
 
         "CREATE TABLE IF NOT EXISTS leitura_energia (
@@ -247,39 +248,34 @@ try {
             leitura_interno_anterior_ref,
             leitura_interno_2_anterior_ref,
             valor_fatura_total,
+            COALESCE(valor_dividido_igual, 0) AS fixo,
             LAG(leitura_interno) OVER (PARTITION BY local_medidor ORDER BY data_leitura) AS prev_interno,
             LAG(leitura_interno_2) OVER (PARTITION BY local_medidor ORDER BY data_leitura) AS prev_interno_2
         FROM consumo_energia
+    ),
+    calc AS (
+        SELECT ord.*,
+            CASE WHEN leitura_padrao > 0 THEN (valor_fatura_total - fixo) / leitura_padrao ELSE 0 END AS vkwh,
+            GREATEST(0, leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0)) AS c2,
+            CASE
+                WHEN leitura_interno_2 IS NOT NULL AND COALESCE(leitura_interno_2_anterior_ref, prev_interno_2) IS NOT NULL
+                    THEN GREATEST(0, leitura_interno_2 - COALESCE(leitura_interno_2_anterior_ref, prev_interno_2))
+                ELSE GREATEST(0, leitura_padrao - GREATEST(0, leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0)))
+            END AS c1
+        FROM ord
     )
     SELECT id,
         data_leitura,
         local_medidor,
         leitura_padrao AS consumo_total_edp,
         valor_fatura_total,
-        CASE
-            WHEN (leitura_padrao > 0) THEN (valor_fatura_total / leitura_padrao)
-            ELSE 0
-        END AS valor_kwh,
-        GREATEST(0, (leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0))) AS consumo_casa_2,
-        CASE
-            WHEN ((leitura_interno_2 IS NOT NULL) AND (COALESCE(leitura_interno_2_anterior_ref, prev_interno_2) IS NOT NULL)) THEN GREATEST(0, (leitura_interno_2 - COALESCE(leitura_interno_2_anterior_ref, prev_interno_2)))
-            ELSE GREATEST(0, (leitura_padrao - GREATEST(0, (leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0)))))
-        END AS consumo_casa_1,
-        (GREATEST(0, (leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0))) *
-            CASE
-                WHEN (leitura_padrao > 0) THEN (valor_fatura_total / leitura_padrao)
-                ELSE 0
-            END) AS valor_casa_2,
-        (
-            CASE
-                WHEN ((leitura_interno_2 IS NOT NULL) AND (COALESCE(leitura_interno_2_anterior_ref, prev_interno_2) IS NOT NULL)) THEN GREATEST(0, (leitura_interno_2 - COALESCE(leitura_interno_2_anterior_ref, prev_interno_2)))
-                ELSE GREATEST(0, (leitura_padrao - GREATEST(0, (leitura_interno - COALESCE(leitura_interno_anterior_ref, prev_interno, 0)))))
-            END *
-            CASE
-                WHEN (leitura_padrao > 0) THEN (valor_fatura_total / leitura_padrao)
-                ELSE 0
-            END) AS valor_casa_1
-    FROM ord;
+        vkwh AS valor_kwh,
+        c2 AS consumo_casa_2,
+        c1 AS consumo_casa_1,
+        (c2 * vkwh + fixo / 2) AS valor_casa_2,
+        (c1 * vkwh + fixo / 2) AS valor_casa_1,
+        fixo AS valor_dividido_igual
+    FROM calc;
     ";
 
     $pdo->exec($vwEnergiaSql);
@@ -301,7 +297,8 @@ try {
         ce.leitura_interno,
         ce.leitura_interno_2,
         ce.leitura_interno_anterior_ref,
-        ce.leitura_interno_2_anterior_ref
+        ce.leitura_interno_2_anterior_ref,
+        v.valor_dividido_igual
     FROM vw_energia_rateio v
     JOIN consumo_energia ce ON ce.id = v.id;
     ";

@@ -174,6 +174,8 @@ const ROTAS = {
     '/ultimo': 'Últimas leituras brutas',
     '/compartilhar': 'Texto do rateio para copiar',
     '/pendentes': 'Leituras aguardando confirmação',
+    '/senha': 'Redefinir senha de usuário (Admin)',
+    '/logo': 'Logo do D-Meter em PNG e JPG',
     '/vincular': 'Entrar com o usuário do painel',
     '/sair': 'Desvincular este aparelho',
     '/ajuda': 'Lista o que o bot faz',

@@ -21,6 +21,9 @@ igual(Interpretacao::analisar('qual a situação?', 'casa2')['pergunta'], 'resum
 igual(Interpretacao::analisar('minha conta', 'casa1'), null, '"minha conta" não é coberto por regra e vai para a IA');
 igual(Interpretacao::analisar('última leitura', 'admin')['pergunta'], 'ultimo', 'última leitura');
 igual(Interpretacao::analisar('manda o texto pro zap', 'admin')['pergunta'], 'compartilhar', 'pedido de texto para copiar');
+igual(Interpretacao::analisar('mensagens', 'admin')['pergunta'], 'mensagens', 'pedido de mensagens separadas');
+igual(Interpretacao::analisar('manda o logo', 'admin')['pergunta'], 'logo', 'manda o logo vira consulta de logo');
+igual(Interpretacao::analisar('logotipo', 'casa1')['pergunta'], 'logo', 'logotipo vira consulta de logo');
 igual(Interpretacao::analisar('água', 'casa1')['pergunta'], 'agua', 'só a palavra, com acento');
 igual(Interpretacao::analisar('energia', 'casa3')['pergunta'], 'energia', 'só a palavra energia');
 
@@ -63,7 +66,10 @@ igual(Interpretacao::analisar('', 'admin'), null, 'texto vazio não é intençã
 igual(Interpretacao::analisar('   ', 'admin'), null, 'só espaço não é intenção');
 
 // ---- data escrita na mensagem ----
-igual(Interpretacao::dataDoTexto('cesan 1806 dia 20'), date('Y-m-') . sprintf('%02d', min(20, (int) date('j'))),
+$esperadoDia20 = (int) date('j') >= 20
+    ? date('Y-m-20')
+    : date('Y-m-20', strtotime('first day of last month'));
+igual(Interpretacao::dataDoTexto('cesan 1806 dia 20'), $esperadoDia20,
     'dia 20 vira o dia 20 do mês corrente (ou do anterior, se ainda não chegou)');
 igual(Interpretacao::dataDoTexto('cesan 1806 05/11/2026'), '2026-11-05', 'data BR completa');
 igual(Interpretacao::dataDoTexto('cesan 1806 2026-11-05'), '2026-11-05', 'data ISO completa');

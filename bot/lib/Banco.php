@@ -95,6 +95,18 @@ class Banco
                 status VARCHAR(20) NOT NULL DEFAULT "recebendo",
                 atualizado_em DATETIME NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+            // convite de uso único para vincular aparelho sem senha (só o hash do código)
+            'CREATE TABLE IF NOT EXISTS telegram_convites (
+                codigo_hash CHAR(64) PRIMARY KEY,
+                usuario_id VARCHAR(50) NOT NULL,
+                usuario_nome VARCHAR(120) NOT NULL,
+                perfil VARCHAR(20) NOT NULL,
+                criado_por BIGINT NOT NULL,
+                criado_em DATETIME NOT NULL,
+                expira_em DATETIME NOT NULL,
+                usado_em DATETIME NULL,
+                usado_por BIGINT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
         ];
         foreach ($ddl as $sql) {
             $pdo->exec($sql);
@@ -347,8 +359,9 @@ class Banco
         $id = self::uuid();
         $stmt = self::pdo()->prepare(
             'INSERT INTO consumo_energia (id, data_leitura, leitura_padrao, leitura_interno, leitura_interno_2,
-                 valor_fatura_total, local_medidor, leitura_interno_anterior_ref, leitura_interno_2_anterior_ref)
-             VALUES (:id, :data, :padrao, :interno, :interno2, :fatura, :local, :ref1, :ref2)'
+                 valor_fatura_total, local_medidor, leitura_interno_anterior_ref, leitura_interno_2_anterior_ref,
+                 valor_dividido_igual)
+             VALUES (:id, :data, :padrao, :interno, :interno2, :fatura, :local, :ref1, :ref2, :fixo)'
         );
         $stmt->execute([
             ':id' => $id,
@@ -360,6 +373,7 @@ class Banco
             ':local' => $p['local'],
             ':ref1' => $p['ref1'],
             ':ref2' => $p['ref2'],
+            ':fixo' => (float) ($p['fixo'] ?? 0),
         ]);
         return $id;
     }
@@ -406,6 +420,15 @@ class Banco
     {
         // mesma conferência do painel: aceita hash e migra senha em texto puro
         return Acesso::autenticar(self::pdo(), $nome, $senha);
+    }
+
+    /** Redefine a senha de um usuário gravando com hash seguro. */
+    public static function redefinirSenha(string $nome, string $novaSenha): bool
+    {
+        $hash = Acesso::gerarHash($novaSenha);
+        $stmt = self::pdo()->prepare("UPDATE usuarios SET senha = :s, senha_alterada = 0 WHERE LOWER(nome) = LOWER(:n)");
+        $stmt->execute([':s' => $hash, ':n' => trim($nome)]);
+        return $stmt->rowCount() > 0;
     }
 
     /** Mapeia perfil -> nome do morador, para as mensagens saírem com nome de gente. */
@@ -455,15 +478,38 @@ class Banco
         $stmt->execute([':n' => $nome, ':v' => $valor]);
     }
 
+    /**
+     * Guarda a leitura de um relógio enviada por foto (watímetro da Loja 02,
+     * submedidor da Casa 2) junto com o dia em que chegou.
+     *
+     * A data mora numa chave irmã (<chave>_EM) para não quebrar quem já lê a
+     * chave principal como número.
+     */
+    public static function salvarLeituraFoto(string $chave, float $valor): void
+    {
+        self::salvarSegredo($chave, (string) $valor);
+        self::salvarSegredo($chave . '_EM', fmt_hoje());
+    }
+
+    /** @return array{valor: float, em: ?string}|null */
+    public static function leituraFoto(string $chave): ?array
+    {
+        $valor = self::obterSegredo($chave);
+        if ($valor === null || !is_numeric($valor)) {
+            return null;
+        }
+        return ['valor' => (float) $valor, 'em' => self::obterSegredo($chave . '_EM')];
+    }
+
     public static function obterSegredo(string $nome): ?string
     {
-        self::garantirTabelas();
         try {
+            self::garantirTabelas();
             $stmt = self::pdo()->prepare('SELECT value FROM app_secrets WHERE name = :n LIMIT 1');
             $stmt->execute([':n' => $nome]);
             $row = $stmt->fetch();
             return $row ? (string) $row['value'] : null;
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             return null;
         }
     }

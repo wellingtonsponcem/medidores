@@ -31,6 +31,59 @@ class Pendencia
         return $id;
     }
 
+    /** O que a leitura de água precisa ter para virar pendência. */
+    public const AGUA_OBRIGATORIOS = ['cesan', 'fatura', 'h1', 'h2', 'h3'];
+
+    /**
+     * Junta uma leitura de água montada aos poucos: fatura num envio,
+     * hidrômetros noutro, um número digitado no fim. O valor novo vence o
+     * guardado (é a correção de quem reenviou), e os avisos se acumulam.
+     */
+    public static function aguaJuntar(array $guardado, array $novo): array
+    {
+        $avisos = array_merge($guardado['avisos_ocr'] ?? [], $novo['avisos_ocr'] ?? []);
+        $p = array_merge($guardado, array_filter($novo, fn($v) => $v !== null && $v !== ''));
+        $p['avisos_ocr'] = array_values(array_unique($avisos));
+        return $p;
+    }
+
+    /** @return string[] rótulos do que ainda falta, na ordem em que o usuário vê */
+    public static function aguaFaltando(array $p): array
+    {
+        $falta = [];
+        if ((float) ($p['cesan'] ?? 0) <= 0 || (float) ($p['fatura'] ?? 0) <= 0) {
+            $falta[] = 'fatura da CESAN';
+        }
+        foreach (['h1', 'h2', 'h3'] as $h) {
+            if ((float) ($p[$h] ?? 0) <= 0) {
+                $falta[] = strtoupper($h);
+            }
+        }
+        return $falta;
+    }
+
+    /** Lê "h1 512 h2 300", "cesan 1861", "fatura 407,06" digitados durante a montagem. */
+    public static function aguaDoTexto(string $texto): array
+    {
+        $t = strtolower($texto);
+        $p = [];
+        if (preg_match_all('/\bh\s*([123])\s*[:=-]?\s*(\d+(?:[.,]\d+)?)/', $t, $m, PREG_SET_ORDER)) {
+            foreach ($m as $x) {
+                $p['h' . $x[1]] = (float) sanitizar_hidro($x[2], null);
+            }
+        }
+        if (preg_match('/\bcesan\s*[:=-]?\s*(\d+)/', $t, $x)) {
+            $p['cesan'] = (float) $x[1];
+        }
+        if (preg_match('/\b(?:fatura|valor|total)\s*[:=-]?\s*(?:r\$\s*)?(\d[\d.,]*)/', $t, $x)) {
+            $v = sanitizar_numero($x[1]);
+            if ($v !== null) {
+                $p['fatura'] = $v;
+            }
+        }
+        return array_filter($p, fn($v) => $v > 0);
+    }
+
     public static function teclado(string $id): array
     {
         return [[
@@ -109,7 +162,13 @@ class Pendencia
         $s .= 'Ref. ' . fmt_mes_ref($d['data'] ?? null) . "\n\n";
         $s .= 'Consumo total da fatura: ' . fmt_num($r['consumo_total'], 2) . " kWh\n";
         $s .= 'Valor da fatura: ' . fmt_moeda($r['valor_fatura_total']) . "\n";
-        $s .= 'Valor do kWh: ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        if ($r['valor_fixo'] > 0) {
+            $s .= 'Iluminação pública e taxas fixas: ' . fmt_moeda($r['valor_fixo'])
+                . ' → ' . fmt_moeda($r['fixo_por_unidade']) . " para cada casa\n";
+            $s .= 'Valor do kWh (sem a parte fixa): ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        } else {
+            $s .= 'Valor do kWh: ' . fmt_moeda($r['valor_kwh']) . "\n\n";
+        }
 
         $s .= "*Rateio previsto*\n";
         $s .= "• {$r['interno_rotulo']}: " . fmt_num($r['consumo_interno'], 2) . ' kWh → *' . fmt_moeda($r['valor_interno'])
@@ -143,7 +202,9 @@ class Pendencia
             'interno_ref' => $anterior['leitura_interno_anterior_ref'] ?? $anterior['leitura_interno'] ?? 0,
             'interno2_ref' => $anterior['leitura_interno_2_anterior_ref'] ?? $anterior['leitura_interno_2'] ?? null,
         ];
-        return conferir_energia($d, $ref, $r);
+        // os avisos do OCR (relógio velho, endereço trocado) eram guardados mas
+        // nunca chegavam à mensagem — quem confirmava não os via
+        return array_values(array_unique(array_merge(conferir_energia($d, $ref, $r), $d['avisos_ocr'] ?? [])));
     }
 
     /**
@@ -201,6 +262,7 @@ class Pendencia
                     'local' => $d['local'] ?? 'rua_inhambu',
                     'ref1' => $d['ref1'] ?? null,
                     'ref2' => $d['ref2'] ?? null,
+                    'fixo' => $d['fixo'] ?? 0,
                 ]);
                 return ['ok' => true, 'id' => $id];
             }
@@ -223,8 +285,12 @@ class Pendencia
      * O coleta_tuya.php faz echo e usa globals, então isolamos com output buffer.
      * Se o .env do cron não existir devolvemos erro amigável em vez de deixar o
      * die() do script derrubar a resposta do webhook.
+     *
+     * Pública porque o /sincronizar, a foto do watímetro e a fatura da Av.
+     * Brasil também disparam a coleta. Era private, e cada uma dessas chamadas
+     * morria com erro fatal — o Telegram reenviava o update e o bot repetia.
      */
-    private static function executarTuya(array $d): array
+    public static function executarTuya(array $d): array
     {
         $arquivo = BOT_RAIZ . '/cron/coleta_tuya.php';
         $envDoCron = BOT_RAIZ . '/cron/.env';

@@ -14,9 +14,81 @@ class Ocr
     public const PAPEIS_AGUA = ['fatura', 'h1', 'h2', 'h3'];
     public const PAPEIS_ENERGIA = ['fatura', 'interno'];
 
+    /** Relógio que cada imóvel recebe por foto, e a coluna do rateio onde ele vai parar. */
+    public const RELOGIO_POR_FOTO = [
+        'av_brasil' => ['chave' => 'ULTIMO_WATIMETRO_LOJA2', 'coluna' => 'leitura_interno_2'],
+        'rua_inhambu' => ['chave' => 'ULTIMO_WATIMETRO_CASA2', 'coluna' => 'leitura_interno'],
+    ];
+
     private static function chaveGemini(): ?string
     {
         return Banco::chaveGemini();
+    }
+
+    /** Valor do relógio já usado no último rateio gravado deste imóvel, ou null. */
+    public static function relogioUsadoNoRateio(string $local): ?float
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        $ant = $cfg ? Banco::ultimaEnergiaBruta($local) : null;
+        $v = $ant[$cfg['coluna'] ?? ''] ?? null;
+        return $v !== null && $v !== '' ? (float) $v : null;
+    }
+
+    /**
+     * Confere a leitura nova de um relógio antes de guardá-la.
+     *
+     * Relógio de energia só anda para frente. Uma leitura menor que a última
+     * conhecida é foto errada (outro medidor, dígito mal lido) — e, guardada,
+     * entraria calada no próximo rateio.
+     *
+     * @return string|null mensagem de recusa, ou null quando está tudo certo
+     */
+    public static function conferirRelogioNovo(string $local, float $nova): ?string
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        if ($cfg === null) {
+            return null;
+        }
+        $refs = array_filter([
+            Banco::leituraFoto($cfg['chave'])['valor'] ?? null,
+            self::relogioUsadoNoRateio($local),
+        ], fn($v) => $v !== null);
+        if (!$refs) {
+            return null;
+        }
+        $anterior = max($refs);
+        if ($nova < $anterior) {
+            return 'A leitura ' . fmt_num($nova, 2) . ' kWh é menor que a última registrada ('
+                . fmt_num($anterior, 2) . " kWh). Relógio não anda para trás — confira a foto e mande de novo.\n\n"
+                . 'Não guardei nada.';
+        }
+        return null;
+    }
+
+    /**
+     * Leitura do relógio por foto que pode entrar no rateio deste mês.
+     *
+     * Antes, a última foto valia para sempre: se ninguém mandasse uma nova, o
+     * rateio seguinte reaproveitava a do mês passado e a unidade saía com
+     * consumo zero sem aviso. Agora uma foto que não passou da leitura já usada
+     * no último rateio é tratada como velha e fica de fora.
+     *
+     * @return array{valor: ?float, aviso: ?string}
+     */
+    public static function relogioParaRateio(string $local, string $rotulo): array
+    {
+        $cfg = self::RELOGIO_POR_FOTO[$local] ?? null;
+        $foto = $cfg ? Banco::leituraFoto($cfg['chave']) : null;
+        if ($foto === null) {
+            return ['valor' => null, 'aviso' => null];
+        }
+        $usado = self::relogioUsadoNoRateio($local);
+        if ($usado !== null && $foto['valor'] <= $usado) {
+            $quando = $foto['em'] ? ' (foto de ' . fmt_data_br($foto['em']) . ')' : '';
+            return ['valor' => null, 'aviso' => "A última foto do relógio da {$rotulo} — "
+                . fmt_num($foto['valor'], 2) . " kWh{$quando} — já entrou no rateio anterior. Peça uma foto nova."];
+        }
+        return ['valor' => $foto['valor'], 'aviso' => null];
     }
 
     /**
@@ -91,15 +163,16 @@ class Ocr
         $prompt = "Analise a imagem e classifique o que ela mostra.\n"
             . "Contexto: são fotos de contas e medidores de um condomínio brasileiro.\n\n"
             . "Responda APENAS o JSON, sem markdown.\n\n"
-            . 'Valores possiveis para "tipo": "fatura_agua" (fatura da CESAN/agua), '
-            . '"h1" (hidrometro com etiqueta/adesivo 01 ou H1 visivel), '
-            . '"h2" (hidrometro com etiqueta/adesivo 02 ou H2 visivel), '
-            . '"h3" (hidrometro com etiqueta/adesivo 03 ou H3 visivel), '
-            . '"hidrometro" (hidrometro sem etiqueta identificadora clara), '
-            . '"fatura_energia" (fatura de luz/EDP), '
-            . '"relogio" (relatorio interno, submedidor Nansen ou whatimetro digital), '
-            . '"outro" (qualquer outra coisa).\n'
-            . 'Use "outro" quando nao tiver certeza. Nao invente.';
+            . "Valores possíveis para 'tipo':\n"
+            . "- 'fatura_agua': fatura da CESAN / conta de água\n"
+            . "- 'fatura_energia': fatura de luz / EDP\n"
+            . "- 'h1': hidrômetro com etiqueta, marcação, fita ou anotação '01', '1', 'H1' ou 'Casa 1'\n"
+            . "- 'h2': hidrômetro com etiqueta, marcação, fita ou anotação '02', '2', 'H2' ou 'Casa 2'\n"
+            . "- 'h3': hidrômetro com etiqueta, marcação, fita ou anotação '03', '3', 'H3' ou 'Casa 3'\n"
+            . "- 'hidrometro': hidrômetro analógico de água sem NENHUMA identificação de casa visível\n"
+            . "- 'relogio': relógio interno, medidor digital/analógico de energia (ex: Nansen Lumen, display digital de kWh, watímetro)\n"
+            . "- 'outro': qualquer outra coisa não relacionada.\n\n"
+            . "Atenção especial: olhe atentamente para números anotados na carcaça, visor, tampa ou fita adesiva do hidrômetro antes de escolher 'hidrometro'.";
 
         $corpo = json_encode([
             'contents' => [['parts' => [
@@ -134,6 +207,8 @@ class Ocr
             'h3' => ['h3', 'o hidrômetro H3 (Casa 3)'],
             'fatura_energia' => ['fatura_energia', 'a fatura de energia'],
             'relogio' => ['interno', 'o relógio interno'],
+            'watimetro' => ['interno', 'o watímetro'],
+            'interno' => ['interno', 'o relógio interno'],
             'hidrometro' => ['hidrometro', 'um hidrômetro'],
         ];
 
@@ -145,6 +220,121 @@ class Ocr
             return ['ok' => false, 'papel' => 'hidrometro', 'rotulo' => $mapa[$tipo][1]];
         }
         return ['ok' => true, 'papel' => $mapa[$tipo][0], 'rotulo' => $mapa[$tipo][1]];
+    }
+
+    /**
+     * Classifica todas as fotos de um álbum em uma única chamada de IA.
+     *
+     * Identifica em conjunto o que é fatura e o que é medidor individual (H1, H2, H3,
+     * interno), garantindo que as imagens recebam papéis consistentes sem repetições.
+     *
+     * @param array $fotos lista de ['papel' => ?string, 'data' => base64, 'mimeType' => string, 'legenda' => string]
+     * @return array fotos atualizadas com o campo 'papel' preenchido
+     */
+    public static function classificarAlbum(array $fotos): array
+    {
+        $chave = self::chaveGemini();
+        if ($chave === null || !$fotos) {
+            return $fotos;
+        }
+
+        $prompt = "Você é o assistente de um condomínio brasileiro que processa faturas e medidores.\n"
+            . "O usuário enviou um conjunto de imagens juntas em um álbum.\n"
+            . "Sua tarefa é analisar TODAS as imagens e identificar o papel de CADA UMA (IMAGEM 1, IMAGEM 2, etc.):\n\n"
+            . "Papéis possíveis:\n"
+            . "- \"fatura\": Fatura da CESAN (conta de água com consumo em m³, código de barras, logo CESAN)\n"
+            . "- \"fatura_energia\": Fatura da EDP (conta de luz / energia elétrica com consumo em kWh, logo EDP)\n"
+            . "- \"h1\": Hidrômetro da Casa 1 (medidor de água redondo com roletes pretos/vermelhos e indicação 01, 1, H1 ou Casa 1)\n"
+            . "- \"h2\": Hidrômetro da Casa 2 (medidor de água redondo com indicação 02, 2, H2 ou Casa 2)\n"
+            . "- \"h3\": Hidrômetro da Casa 3 (medidor de água redondo com indicação 03, 3, H3 ou Casa 3)\n"
+            . "- \"interno\": Relógio interno, watímetro digital ou submedidor de energia (ex: display LCD de kWh, Nansen Lumen)\n"
+            . "- \"hidrometro\": Hidrômetro de água sem identificação visível de qual casa pertence\n"
+            . "- \"outro\": Imagem não relacionada\n\n"
+            . "Regras para identificar os hidrômetros (Casa 1, Casa 2, Casa 3):\n"
+            . "- Procure atentamente nos hidrômetros por adesivos, fita crepe, etiquetas ou anotações na carcaça/tampa com '01', '02', '03' ou '1', '2', '3'.\n"
+            . "- Se houver 3 hidrômetros de água e algum não tiver etiqueta legível, deduza logicamente para preencher h1, h2 e h3 sem duplicar.\n\n"
+            . "Retorne APENAS um JSON no formato:\n"
+            . "{\n"
+            . "  \"tipo_geral\": \"agua\" | \"energia\" | \"outro\",\n"
+            . "  \"imagens\": [\n"
+            . "    {\"indice\": 1, \"papel\": \"fatura\"},\n"
+            . "    {\"indice\": 2, \"papel\": \"h1\"}\n"
+            . "  ]\n"
+            . "}";
+
+        $parts = [['text' => $prompt]];
+        $n = 1;
+        foreach ($fotos as $f) {
+            $parts[] = ['text' => "IMAGEM {$n}:"];
+            $parts[] = ['inlineData' => ['mimeType' => $f['mimeType'], 'data' => $f['data']]];
+            $n++;
+        }
+
+        $corpo = json_encode([
+            'contents' => [['parts' => $parts]],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
+                'temperature' => 0,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $r = Gemini::gerarJson($chave, $corpo);
+        if (!$r['ok']) {
+            return $fotos;
+        }
+
+        $json = self::parsearJson(Gemini::textoDoResultado($r['data']));
+        if (!$json || empty($json['imagens']) || !is_array($json['imagens'])) {
+            return $fotos;
+        }
+
+        $mapaPapeis = [
+            'fatura_agua' => 'fatura',
+            'fatura_cesan' => 'fatura',
+            'conta_agua' => 'fatura',
+            'fatura' => 'fatura',
+            'fatura_energia' => 'fatura_energia',
+            'fatura_edp' => 'fatura_energia',
+            'conta_energia' => 'fatura_energia',
+            'h1' => 'h1',
+            'h2' => 'h2',
+            'h3' => 'h3',
+            'interno' => 'interno',
+            'relogio' => 'interno',
+            'watimetro' => 'interno',
+            'whatimetro' => 'interno',
+            'submedidor' => 'interno',
+        ];
+
+        $classificados = [];
+        foreach ($json['imagens'] as $i => $item) {
+            $idx = isset($item['indice']) ? ((int) $item['indice']) - 1 : $i;
+            $papelBruto = strtolower((string) ($item['papel'] ?? ''));
+            $papelMapeado = $mapaPapeis[$papelBruto] ?? null;
+            if ($papelMapeado !== null) {
+                $classificados[$idx] = $papelMapeado;
+            }
+        }
+
+        // Se houver hidrômetros sem número explícito, distribui entre h1, h2, h3 disponíveis
+        $papeisUsados = array_values($classificados);
+        $hidrosDisponiveis = array_values(array_diff(['h1', 'h2', 'h3'], $papeisUsados));
+
+        foreach ($fotos as $idx => $f) {
+            if (!empty($f['papel'])) {
+                continue; // preserva papel que veio de legenda
+            }
+            if (isset($classificados[$idx])) {
+                $fotos[$idx]['papel'] = $classificados[$idx];
+            } else {
+                $itemBruto = strtolower((string) ($json['imagens'][$idx]['papel'] ?? ''));
+                if ($itemBruto === 'hidrometro' && !empty($hidrosDisponiveis)) {
+                    $fotos[$idx]['papel'] = array_shift($hidrosDisponiveis);
+                }
+            }
+        }
+
+        return $fotos;
     }
 
     /**
@@ -229,21 +419,30 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     /** Prompt da energia — a ordem e o texto mudam conforme o medidor. */
     private static function promptEnergia(array $fotos, bool $avBrasil): string
     {
-        $prompt = "Você é um robô de leitura de medidores. Analise IMAGEM por IMAGEM estritamente nas regras abaixo e retorne APENAS um JSON limpo:\n\n";
+        $prompt = "Você é um robô de leitura de medidores e faturas de energia. Analise IMAGEM por IMAGEM estritamente nas regras abaixo e retorne APENAS um JSON limpo:\n\n";
         $formato = [];
         $n = 1;
 
         foreach ($fotos as $f) {
             $papel = $f['papel'] ?? '';
             if ($papel === 'fatura' || $papel === 'fatura_energia') {
-                $prompt .= "IMAGEM {$n} [Fatura EDP]: Extraia 'faturaTotal' (valor total a pagar). Extraia o consumo total em kWh faturado e salve em 'leituraPadrao'. Verifique o endereço/UC da fatura: se for Avenida Brasil/Praia de Carapebus salve 'av_brasil' em 'local'; se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu' em 'local'. Extraia a data da leitura atual ('AAAA-MM-DD') e salve em 'dataLeitura'.\n";
+                $prompt .= "IMAGEM {$n} [Fatura EDP]:\n"
+                    . "- 'faturaTotal': Extraia o valor total a pagar em Reais (ex: no campo 'Total a Pagar').\n"
+                    . "- 'leituraPadrao': Extraia o consumo total de energia em kWh faturado. Na seção 'EQUIPAMENTOS', confira 'Leitura Atual' menos 'Leitura Anterior' (ex: 6915 - 6633 = 282 kWh) ou verifique na tabela 'HIST. CONSUMO' no mês atual. Tenha atenção redobrada para não confundir o dígito 8 com 9 (ex: 282 e não 292). NUNCA use valores em Reais da 'COMPOSIÇÃO CONSUMO' (ex: 297,65 é valor financeiro em R$, NÃO é consumo!).\n"
+                    . "- 'dataLeitura': Extraia a data da leitura ATUAL da fatura (procure em 'Datas de Leituras' na coluna 'Leitura atual', formato AAAA-MM-DD, ex: 04/11/2026 vira '2026-11-04'). NUNCA use a data da leitura anterior.\n"
+                    . "- 'local': Verifique o endereço/UC. Se for Rua Inhambu/Novo Horizonte salve 'rua_inhambu'; se for Avenida Brasil/Praia de Carapebus salve 'av_brasil'.\n"
+                    . "- 'iluminacaoPublica': No quadro de itens da fatura (Descrição / Valor), o valor em Reais da linha de contribuição de iluminação pública ('Cont. Ilum. Publ.', 'CIP', 'COSIP', 'Contrib. Ilum. Pública'). Ex: 34.98. Se não houver, 0.\n"
+                    . "- 'multasJuros': Soma em Reais das linhas de multa, juros de mora e atualização monetária por atraso, se existirem. NÃO inclua tributos (ICMS, PIS, COFINS), bandeira tarifária, TUSD nem TE. Se não houver, 0.\n";
+                $formato['iluminacaoPublica'] = 34.98;
+                $formato['multasJuros'] = 0;
                 $formato['faturaTotal'] = 200.50;
-                $formato['leituraPadrao'] = 2500;
+                $formato['leituraPadrao'] = 250;
                 $formato['local'] = $avBrasil ? 'av_brasil' : 'rua_inhambu';
-                $formato['dataLeitura'] = '2026-10-05';
+                $formato['dataLeitura'] = '2026-11-04';
             } elseif ($papel === 'interno') {
-                $prompt .= "IMAGEM {$n} [Relógio/Submedidor Interno]: Extraia o número da leitura em kWh exibido no DISPLAY DIGITAL LCD (ex: 4651, 4815, 5019) ou o valor 'Total Ele' no app Tuya. NUNCA use o número de série/código de barras gravado no plástico do medidor (ex: 48299884). Salve o número do display em 'leituraInterno'.\n";
-                $formato['leituraInterno'] = 3500;
+                $prompt .= "IMAGEM {$n} [Relógio/Submedidor Interno]:\n"
+                    . "- 'leituraInterno': Extraia TODOS os dígitos numéricos inteiros do display digital LCD (ex: se o display mostra '05202', salve 5202; se mostra '5019', salve 5019). O medidor Nansen Lumen MD NÃO tem casas decimais no display LCD. NUNCA use o número de série/código de barras gravado no plástico da carcaça (ex: 48299884). Se for app Tuya, extraia o valor do campo 'Total Ele'.\n";
+                $formato['leituraInterno'] = 5000;
             }
             $n++;
         }
@@ -303,64 +502,71 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     }
 
     /**
-     * Monta a leitura de água pronta para virar pendência.
+     * Lê o que der da água nas fotos: fatura, hidrômetros, ou os dois.
      *
-     * @return array{ok:bool, payload?:array, avisos?:array, erro?:string}
+     * Devolve só o que foi lido com valor — nada de zero no lugar do que faltou.
+     * Antes, uma foto só da fatura virava pendência com H1, H2 e H3 em 0 e o
+     * rateio jogava a conta inteira em "Serviço/Comum". Quem junta as partes
+     * (inclusive de envios diferentes) é o handler, com Pendencia::aguaJuntar().
+     *
+     * @return array{ok:bool, parcial?:array, avisos?:array, erro?:string}
      */
-    public static function montarAgua(array $fotos, ?string $data = null): array
+    public static function lerAgua(array $fotos): array
     {
         $r = self::ler('agua', $fotos);
         if (!$r['ok']) {
             return ['ok' => false, 'erro' => $r['erro']];
         }
-        $v = $r['valores'];
-        $corrigido = self::corrigirAgua($v);
+        $corrigido = self::corrigirAgua($r['valores']);
         $v = $corrigido['valores'];
+        $parcial = [];
 
         $fatura = $v['fatura'] ?? [];
-        $data = fmt_data_iso($fatura['data_leitura'] ?? null) ?? ($data ?: fmt_hoje());
-
-        $payload = [
-            'data' => $data,
-            'cesan' => (float) ($fatura['leitura_atual'] ?? $fatura['leitura_fatura'] ?? 0),
-            'h1' => 0,
-            'h2' => 0,
-            'h3' => 0,
-            'fatura' => (float) ($fatura['valor_total'] ?? 0),
-            'origem' => 'foto',
-            'avisos_ocr' => $corrigido['avisos'],
-        ];
-
-        $faltando = [];
-        foreach ($v['medidores_individuais'] ?? [] as $med) {
-            $id = strtolower((string) ($med['identificador'] ?? ''));
-            if (!in_array($id, ['h1', 'h2', 'h3'], true)) {
-                continue;
+        $cesan = (float) ($fatura['leitura_atual'] ?? $fatura['leitura_fatura'] ?? 0);
+        if ($cesan > 0) {
+            $parcial['cesan'] = $cesan;
+            $data = fmt_data_iso($fatura['data_leitura'] ?? null);
+            if ($data) {
+                $parcial['data'] = $data;
             }
-            $valor = sanitizar_hidro($med['leitura_processada'] ?? '', null);
-            if ($valor === '' || (float) $valor <= 0) {
-                $faltando[] = strtoupper($id);
-                continue;
+        }
+        $valor = (float) ($fatura['valor_total'] ?? 0);
+        if ($valor > 0) {
+            $parcial['fatura'] = $valor;
+        }
+
+        // hidrômetro só vale se veio foto de hidrômetro: com a fatura sozinha o
+        // modelo às vezes "lê" um número que não está em foto nenhuma
+        $temHidrometro = false;
+        foreach ($fotos as $f) {
+            if (in_array($f['papel'] ?? '', ['h1', 'h2', 'h3', 'hidrometro'], true)) {
+                $temHidrometro = true;
             }
-            $payload[$id] = (float) $valor;
+        }
+        if ($temHidrometro) {
+            foreach ($v['medidores_individuais'] ?? [] as $med) {
+                $id = strtolower((string) ($med['identificador'] ?? ''));
+                if (!in_array($id, ['h1', 'h2', 'h3'], true)) {
+                    continue;
+                }
+                $lido = sanitizar_hidro($med['leitura_processada'] ?? '', null);
+                if ($lido !== '' && (float) $lido > 0) {
+                    $parcial[$id] = (float) $lido;
+                }
+            }
         }
 
-        if ($payload['cesan'] <= 0) {
-            return ['ok' => false, 'erro' => 'Não consegui ler a leitura da CESAN na fatura. Foto mais nítida, por favor.'];
-        }
-        foreach ($faltando as $f) {
-            $payload[strtolower($f)] = null;
-        }
-        if ($faltando) {
-            $payload['avisos_ocr'][] = 'Não consegui ler o hidrômetro ' . implode(' e ', $faltando)
-                . '. Confira na mensagem e ajuste digitando o número, ou reenvie a foto.';
-        }
-
-        return ['ok' => true, 'payload' => $payload, 'avisos' => $corrigido['avisos']];
+        return ['ok' => true, 'parcial' => $parcial, 'avisos' => $corrigido['avisos']];
     }
 
-    /** Monta a leitura de energia pronta para virar pendência. */
-    public static function montarEnergia(string $local, array $fotos, ?string $data = null): array
+    /**
+     * Monta a leitura de energia pronta para virar pendência.
+     *
+     * @param bool $travarLocal o remetente só tem um imóvel (a Loja 02 é só da Av.
+     *   Brasil): o local não muda pelo que a IA achar do endereço — se ela
+     *   discordar, vira aviso para o admin conferir.
+     */
+    public static function montarEnergia(string $local, array $fotos, ?string $data = null, bool $travarLocal = false): array
     {
         $local = $local === 'av_brasil' ? 'av_brasil' : 'rua_inhambu';
         $r = self::ler($local, $fotos);
@@ -368,10 +574,17 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             return ['ok' => false, 'erro' => $r['erro']];
         }
         $v = $r['valores'];
+        $avisos = [];
 
         // Se a fatura EDP indicou o local exato (Av. Brasil vs Rua Inhambu), respeita
-        if (!empty($v['local']) && in_array($v['local'], ['av_brasil', 'rua_inhambu'], true)) {
-            $local = $v['local'];
+        $localLido = $v['local'] ?? null;
+        if (in_array($localLido, ['av_brasil', 'rua_inhambu'], true) && $localLido !== $local) {
+            if ($travarLocal) {
+                $avisos[] = 'O endereço da fatura parece ser da ' . energia_config($localLido)['rotulo']
+                    . ', mas quem enviou só tem a ' . energia_config($local)['rotulo'] . '. Confira se é a conta certa.';
+            } else {
+                $local = $localLido;
+            }
         }
         if (empty($data) && !empty($v['dataLeitura'])) {
             $dataIso = fmt_data_iso($v['dataLeitura']);
@@ -386,6 +599,10 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             'interno' => (float) ($v['leituraInterno'] ?? 0),
             'interno2' => null,
             'fatura' => (float) ($v['faturaTotal'] ?? 0),
+            // só a Rua Inhambu divide a parte fixa (energia_config divide_fixo)
+            'fixo' => $local === 'rua_inhambu'
+                ? round((float) sanitizar_numero($v['iluminacaoPublica'] ?? 0) + (float) sanitizar_numero($v['multasJuros'] ?? 0), 2)
+                : 0.0,
             'ref1' => $ant ? (float) $ant['leitura_interno'] : null,
             'ref2' => null,
             'origem' => 'foto',
@@ -405,10 +622,11 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
                 }
             }
 
-            // O watímetro da Loja 02 (Fernando) pode ter sido sincronizado por foto
-            $watLoja = Banco::obterSegredo('ULTIMO_WATIMETRO_LOJA2');
-            if ($watLoja) {
-                $payload['interno2'] = (float) $watLoja;
+            // O watímetro da Loja 02 (Fernando) chega por foto — desde que seja deste mês
+            $watLoja = self::relogioParaRateio('av_brasil', 'Loja 02');
+            $payload['interno2'] = $watLoja['valor'];
+            if ($watLoja['aviso']) {
+                $payload['avisos_ocr'][] = $watLoja['aviso'];
             }
 
             $payload['ref1'] = $ant ? (float) ($ant['leitura_interno_anterior_ref'] ?? $ant['leitura_interno'] ?? 0) : null;
@@ -417,9 +635,12 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             }
         } elseif ($local === 'rua_inhambu') {
             if ($payload['interno'] <= 0) {
-                $watMirian = Banco::obterSegredo('ULTIMO_WATIMETRO_CASA2');
-                if ($watMirian) {
-                    $payload['interno'] = (float) $watMirian;
+                $watCasa2 = self::relogioParaRateio('rua_inhambu', 'Casa 2');
+                if ($watCasa2['valor'] !== null) {
+                    $payload['interno'] = $watCasa2['valor'];
+                }
+                if ($watCasa2['aviso']) {
+                    $payload['avisos_ocr'][] = $watCasa2['aviso'];
                 }
             }
         }
@@ -427,6 +648,6 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
         if ($payload['padrao'] <= 0) {
             return ['ok' => false, 'erro' => 'Não consegui ler o consumo total da fatura de energia. Foto mais nítida, por favor.'];
         }
-        return ['ok' => true, 'payload' => $payload, 'avisos' => []];
+        return ['ok' => true, 'payload' => $payload, 'avisos' => $avisos];
     }
 }

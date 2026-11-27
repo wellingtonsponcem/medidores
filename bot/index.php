@@ -26,12 +26,15 @@ const ALBUM_PASSO_MS = 600;
 /** Menu publicado no Telegram pelo scripts/telegram-setup.mjs. */
 const COMANDOS = [
     '/resumo' => 'Água e energia do último mês',
+    '/mensagens' => 'Mensagens individuais dos moradores para copiar',
     '/agua' => 'Rateio detalhado da água (CESAN)',
     '/energia' => 'Rateio detalhado da energia',
     '/ultimo' => 'Últimas leituras brutas',
     '/compartilhar' => 'Texto do rateio para copiar',
     '/pendentes' => 'Leituras aguardando confirmação',
     '/sincronizar' => 'Sincronizar whatímetro Tuya e Loja',
+    '/logo' => 'Envia o logo do D-Meter em PNG e JPG',
+    '/senha' => 'Redefinir senha de morador ou admin',
     '/vincular' => 'Entrar com o usuário do painel',
     '/sair' => 'Desvincular este aparelho',
     '/ajuda' => 'Lista o que o bot faz',
@@ -138,7 +141,8 @@ function despachar(array $update): void
     }
 
     $textoBruto = trim((string) ($m['text'] ?? ''));
-    if ($textoBruto !== '' && preg_match('/^\/?(vincular|login)\b/i', $textoBruto)) {
+    // vincular e convite entram antes da allowlist: são justamente a porta de entrada
+    if ($textoBruto !== '' && preg_match('/^\/?(vincular|login)\b|^\/start\s+\S/i', $textoBruto)) {
         aoComando($chatId, $m, $textoBruto);
         return;
     }
@@ -239,6 +243,13 @@ function aoComando(int $chatId, array $m, string $texto): void
 
     switch ($comando) {
         case 'start':
+            if (isset($args[0]) && $args[0] !== '') {
+                cmdEntrarPorConvite($chatId, $m, $args[0]);
+                return;
+            }
+            Telegram::enviarMensagem($chatId, resp_ajuda(ehAdmin($chatId)));
+            return;
+
         case 'ajuda':
         case 'help':
         case 'comandos':
@@ -257,6 +268,11 @@ function aoComando(int $chatId, array $m, string $texto): void
 
         case 'resumo':
             cmdResumo($chatId);
+            return;
+
+        case 'mensagens':
+        case 'msg':
+            cmdMensagens($chatId);
             return;
 
         case 'agua':
@@ -288,6 +304,22 @@ function aoComando(int $chatId, array $m, string $texto): void
 
         case 'usuarios':
             cmdUsuarios($chatId);
+            return;
+
+        case 'senha':
+        case 'resetarsenha':
+        case 'redefinir':
+            cmdRedefinirSenha($chatId, $args);
+            return;
+
+        case 'logo':
+        case 'logotipo':
+            cmdLogo($chatId);
+            return;
+
+        case 'convite':
+        case 'convidar':
+            cmdConvite($chatId, $args);
             return;
 
         default:
@@ -326,6 +358,59 @@ function cmdVincular(int $chatId, array $m, array $args): void
         ? "Você é administrador: pode consultar tudo e lançar leitura por foto ou por texto.\n\n" . resp_ajuda(true)
         : "Você consulta o consumo da sua unidade.\n\n" . resp_ajuda(false);
     Telegram::enviarMensagem($chatId, $s);
+}
+
+/** Admin: gera o link de uso único que vincula o aparelho de um morador sem senha. */
+function cmdConvite(int $chatId, array $args): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, 'Só o administrador gera convites.');
+        return;
+    }
+    if (!isset($args[0])) {
+        Telegram::enviarMensagem($chatId, "Use `/convite usuário` — por exemplo `/convite wellington`.\n\n"
+            . 'O bot devolve um link que vale uma vez, por ' . Convite::HORAS . ' horas. Quem tocar nele entra com o acesso daquele usuário, sem senha.');
+        return;
+    }
+    $r = Convite::criar($args[0], $chatId);
+    if (!$r['ok']) {
+        Telegram::enviarMensagem($chatId, $r['erro']);
+        return;
+    }
+    $bot = Telegram::chamar('getMe')['resultado']['username'] ?? null;
+    $link = $bot ? "https://t.me/{$bot}?start={$r['codigo']}" : null;
+    $quem = ucfirst((string) $r['usuario']['nome']);
+
+    Telegram::enviarMensagem($chatId, "🔗 *Convite para {$quem}* ({$r['usuario']['perfil']})\n\n"
+        . 'Encaminhe a próxima mensagem para ele. O link vale *uma vez*, até '
+        . fmt_data_br($r['expira_em']) . ' ' . substr($r['expira_em'], 11, 5) . '.');
+    // só o convite, em texto puro, para encaminhar sem formatação quebrada
+    Telegram::enviarMensagem($chatId, $link
+        ? "Oi, {$quem}! Toque no link para entrar no bot do D-Meter e receber o seu consumo:\n{$link}"
+        : "Oi, {$quem}! Abra o bot do D-Meter no Telegram e envie:\n/start {$r['codigo']}", null, null);
+}
+
+/** Quem tocou no link do convite: vincula o aparelho e dá as boas-vindas. */
+function cmdEntrarPorConvite(int $chatId, array $m, string $codigo): void
+{
+    $userId = isset($m['from']['id']) ? (int) $m['from']['id'] : null;
+    $nomeChat = (string) ($m['from']['first_name'] ?? '');
+    try {
+        $r = Convite::usar($codigo, $chatId, $userId, $nomeChat);
+    } catch (Exception $e) {
+        Telegram::enviarMensagem($chatId, 'Não consegui conferir o convite agora. Toque no link de novo em instantes.');
+        return;
+    }
+    if (!$r['ok']) {
+        Telegram::enviarMensagem($chatId, $r['erro']);
+        return;
+    }
+    $quem = ucfirst((string) $r['usuario']['nome']);
+    Telegram::enviarMensagem($chatId, "👋 Oi, *{$quem}*! Seu aparelho está vinculado ({$r['usuario']['perfil']}).\n\n"
+        . "Por aqui você consulta o consumo de água e energia da sua unidade.\n\n" . resp_ajuda(false));
+    if (!empty($r['criado_por'])) {
+        Telegram::enviarMensagem($r['criado_por'], "✅ *{$quem}* entrou no bot pelo convite.");
+    }
 }
 
 function cmdResumo(int $chatId): void
@@ -438,6 +523,43 @@ function cmdCompartilhar(int $chatId): void
     ) . "\n\n_Com copiar e colar você manda por WhatsApp._");
 }
 
+function cmdMensagens(int $chatId): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, 'Apenas administradores podem solicitar as mensagens individuais de todos os moradores.');
+        return;
+    }
+    $nomes = Banco::nomesPorPerfil();
+    $agua = Banco::ultimoRateioAgua();
+    $enviou = false;
+    if ($agua) {
+        $separadasAgua = resp_mensagens_separadas_agua($agua, $nomes);
+        foreach ($separadasAgua as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    $energiaInhambu = Banco::ultimoRateioEnergia('rua_inhambu');
+    if ($energiaInhambu) {
+        $separadasInhambu = resp_mensagens_separadas_energia($energiaInhambu, $nomes);
+        foreach ($separadasInhambu as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    $energiaAv = Banco::ultimoRateioEnergia('av_brasil');
+    if ($energiaAv) {
+        $separadasAv = resp_mensagens_separadas_energia($energiaAv, $nomes);
+        foreach ($separadasAv as $msg) {
+            Telegram::enviarMensagem($chatId, $msg);
+            $enviou = true;
+        }
+    }
+    if (!$enviou) {
+        Telegram::enviarMensagem($chatId, 'Nenhum rateio recente encontrado no sistema para gerar mensagens.');
+    }
+}
+
 function cmdPendentes(int $chatId): void
 {
     $lista = Banco::pendenciasDoChat($chatId);
@@ -466,9 +588,10 @@ function cmdSincronizar(int $chatId, array $args): void
             . "• *Leitura:* `{$val}`\n"
             . "• *Registro:* {$dt}\n\n";
 
-        $watLoja = Banco::obterSegredo('ULTIMO_WATIMETRO_LOJA2');
+        $watLoja = Banco::leituraFoto('ULTIMO_WATIMETRO_LOJA2');
         if ($watLoja) {
-            $s .= "🔌 *Watímetro Loja (Fernando):* `" . fmt_num((float) $watLoja, 2) . " kWh`\n\n";
+            $quando = $watLoja['em'] ? ' (foto de ' . fmt_data_br($watLoja['em']) . ')' : '';
+            $s .= "🔌 *Watímetro Loja (Fernando):* `" . fmt_num($watLoja['valor'], 2) . " kWh`{$quando}\n\n";
         }
         $s .= "Ambos os medidores estão sincronizados e prontos para o rateio da Av. Brasil.";
         Telegram::enviarMensagem($chatId, $s);
@@ -499,6 +622,70 @@ function cmdUsuarios(int $chatId): void
     }
 }
 
+function cmdLogo(int $chatId): void
+{
+    Telegram::acaoChat($chatId, 'upload_photo');
+    $urlJpg = SITE_URL . '/logo.jpg';
+    $urlPng = SITE_URL . '/logo.png';
+    $urlSvg = SITE_URL . '/logo.svg';
+
+    $teclado = [
+        [
+            ['text' => '🌐 Ver SVG Vetorial', 'url' => $urlSvg],
+            ['text' => '📥 Baixar PNG HD', 'url' => $urlPng],
+        ]
+    ];
+
+    // 1. Envia o JPG como Foto com legenda e botões
+    Telegram::enviarFoto(
+        $chatId,
+        $urlJpg,
+        "🖼 *Logo D-Meter (JPG)*\n\n• Resolução: 1905x1875\n• Fundo: Branco\n• Ideal para: Documentos, faturas e relatórios",
+        $teclado
+    );
+
+    // 2. Envia o PNG como Documento (preserva canal Alpha e qualidade original sem compressão)
+    Telegram::enviarDocumento(
+        $chatId,
+        $urlPng,
+        "📄 *Logo D-Meter (PNG Transparente)*\n\n• Resolução: 1905x1875 (com canal Alpha)\n• Fundo: Transparente\n• Ideal para: Design, web e sobreposições"
+    );
+}
+
+function cmdRedefinirSenha(int $chatId, array $args): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, resp_sem_permissao());
+        return;
+    }
+    if (count($args) < 2) {
+        Telegram::enviarMensagem($chatId, "Para redefinir a senha de um usuário, use:\n`/senha usuario novasenha`\n\nExemplo: `/senha maria 123456`");
+        return;
+    }
+    $usuario = trim((string) $args[0]);
+    $novaSenha = trim((string) $args[1]);
+    if (strlen($novaSenha) < 4) {
+        Telegram::enviarMensagem($chatId, "⚠️ A nova senha deve ter pelo menos 4 caracteres.");
+        return;
+    }
+
+    try {
+        $ok = Banco::redefinirSenha($usuario, $novaSenha);
+        if ($ok) {
+            Telegram::enviarMensagem(
+                $chatId,
+                "✅ Senha do usuário *{$usuario}* redefinida com sucesso para: `{$novaSenha}`\n\n"
+                . "A pessoa já pode enviar no bot do Telegram:\n"
+                . "`/vincular {$usuario} {$novaSenha}`"
+            );
+        } else {
+            Telegram::enviarMensagem($chatId, "⚠️ Usuário *{$usuario}* não foi encontrado no cadastro.");
+        }
+    } catch (Exception $e) {
+        Telegram::enviarMensagem($chatId, "Erro ao redefinir a senha: " . $e->getMessage());
+    }
+}
+
 // ============================================================ texto livre
 
 function aoTexto(int $chatId, array $m, string $texto): void
@@ -517,6 +704,19 @@ function aoTexto(int $chatId, array $m, string $texto): void
         Conversa::limpar($chatId);
         cmdEnergia($chatId, energia_local_normalizado($texto));
         return;
+    }
+    if ($estado['estado'] === 'montando_agua' && ehAdmin($chatId)) {
+        if (in_array($textoNorm, ['cancelar', 'cancela', 'desistir'], true)) {
+            Conversa::limpar($chatId);
+            Telegram::enviarMensagem($chatId, 'Leitura de água descartada. Nada foi gravado.');
+            return;
+        }
+        // número digitado completa a leitura; qualquer outra coisa segue o fluxo normal
+        $digitado = Pendencia::aguaDoTexto($texto);
+        if ($digitado) {
+            avancarAgua($chatId, $digitado);
+            return;
+        }
     }
 
     $intencao = Interpretacao::analisar($texto, $perfil);
@@ -582,6 +782,12 @@ function responderConsulta(int $chatId, string $pergunta, ?string $local = null,
             return;
         case 'compartilhar':
             cmdCompartilhar($chatId);
+            return;
+        case 'mensagens':
+            cmdMensagens($chatId);
+            return;
+        case 'logo':
+            cmdLogo($chatId);
             return;
         default:
             cmdResumo($chatId);
@@ -683,17 +889,21 @@ function aoReceberFoto(int $chatId, array $m, array $anexo): void
     $legenda = trim((string) ($m['caption'] ?? ''));
     $papel = $legenda !== '' ? papelDaLegenda($legenda) : null;
 
+    // a Loja 02 não tem conta de água: "fatura"/"conta" na legenda dela é a da EDP
+    if ($ehFernando && $papel === 'fatura') {
+        $papel = 'fatura_energia';
+    }
     if ($ehFernando && $papel !== null && !in_array($papel, ['interno', 'fatura_energia'], true)) {
         Telegram::enviarMensagem($chatId, "Você pode enviar fotos do watímetro da sua loja ou da fatura de energia da Av. Brasil.");
         return;
     }
 
     $albumId = (string) ($m['media_group_id'] ?? '');
-    if ($papel !== null || $albumId === '') {
-        processarUmArquivo($chatId, $m, $anexo, $papel);
+    if ($albumId !== '') {
+        processarAlbum($chatId, $m, $anexo, $albumId, $papel);
         return;
     }
-    processarAlbum($chatId, $m, $anexo, $albumId);
+    processarUmArquivo($chatId, $m, $anexo, $papel);
 }
 
 /** Legenda curta diz o que a foto é — "h1", "fatura", "energia", "relógio". */
@@ -727,45 +937,79 @@ function papelDaLegenda(string $legenda): ?string
  *
  * Guardamos as peças e esperamos uma pausa antes de processar — o Telegram manda
  * as fotos de um álbum em poucos segundos. Quem vencer o UPDATE atômico de
- * status faz a leitura; os demais processos saem sem tocar no banco, que é o
- * mesmo truque do album.js do Gampo.
+ * status no registro master faz a leitura; os demais processos saem sem tocar
+ * no banco ou enviar mensagens duplicadas.
  */
-function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): void
+function processarAlbum(int $chatId, array $m, array $anexo, string $albumId, ?string $papel = null): void
 {
     Banco::garantirTabelas();
     $pdo = Banco::pdo();
 
+    $agora = time();
+    $msgId = (int) ($m['message_id'] ?? 0);
+
+    // Grava cada foto individual do álbum
     $stmt = $pdo->prepare(
         'INSERT INTO telegram_album (id, chat_id, mensagem_id, file_id, papel, status, atualizado_em)
-         VALUES (:id, :chat, :msg, :file, NULL, "recebendo", NOW())
-         ON DUPLICATE KEY UPDATE file_id = VALUES(file_id), atualizado_em = NOW()'
+         VALUES (:id, :chat, :msg, :file, :papel, "recebendo", NOW())
+         ON DUPLICATE KEY UPDATE file_id = VALUES(file_id), papel = COALESCE(VALUES(papel), papel), atualizado_em = NOW()'
     );
     $stmt->execute([
-        ':id' => $albumId . ':' . (int) ($m['message_id'] ?? 0),
+        ':id' => $albumId . ':' . $msgId,
         ':chat' => $chatId,
-        ':msg' => (int) ($m['message_id'] ?? 0),
+        ':msg' => $msgId,
         ':file' => (string) $anexo['file_id'],
+        ':papel' => $papel,
+    ]);
+
+    // Registro coordenador do álbum: armazena timestamp PHP (int) no campo mensagem_id
+    $stmtMaster = $pdo->prepare(
+        'INSERT INTO telegram_album (id, chat_id, mensagem_id, file_id, papel, status, atualizado_em)
+         VALUES (:id, :chat, :ts, "", NULL, "recebendo", NOW())
+         ON DUPLICATE KEY UPDATE mensagem_id = VALUES(mensagem_id), status = IF(status = "processando", status, "recebendo"), atualizado_em = NOW()'
+    );
+    $stmtMaster->execute([
+        ':id' => 'master:' . $albumId,
+        ':chat' => $chatId,
+        ':ts' => $agora,
     ]);
 
     $inicio = microtime(true);
     while (true) {
         usleep(ALBUM_PASSO_MS * 1000);
-        $parado = silencioDoAlbum($albumId);
+
+        // Verifica estado do coordenador
+        $sel = $pdo->prepare('SELECT mensagem_id, status FROM telegram_album WHERE id = :id');
+        $sel->execute([':id' => 'master:' . $albumId]);
+        $master = $sel->fetch();
+
+        // Se outro processo já assumiu o álbum, ou se foi cancelado, sai silenciosamente
+        if (!$master || $master['status'] !== 'recebendo') {
+            return;
+        }
+
+        $ultimoTs = (int) $master['mensagem_id'];
+        $silencio = (time() - $ultimoTs) * 1000 >= ALBUM_SILENCIO_MS;
         $estourou = (microtime(true) - $inicio) * 1000 >= ALBUM_LIMITE_MS;
-        if ($parado || $estourou) {
+
+        if ($silencio || $estourou) {
             break;
         }
     }
 
-    // claim: só um processo segue daqui para a leitura por IA
-    $claim = $pdo->prepare('UPDATE telegram_album SET status = "lendo" WHERE id LIKE :a AND status = "recebendo"');
-    $claim->execute([':a' => $albumId . ':%']);
+    // Claim atômico: exatamente UM processo consegue mudar de "recebendo" para "processando"
+    $claim = $pdo->prepare('UPDATE telegram_album SET status = "processando" WHERE id = :id AND status = "recebendo"');
+    $claim->execute([':id' => 'master:' . $albumId]);
     if ($claim->rowCount() === 0) {
-        return; // outro processo assumiu o álbum
+        return; // Outro processo concorrente já assumiu
     }
 
-    $sel = $pdo->prepare('SELECT * FROM telegram_album WHERE id LIKE :a ORDER BY atualizado_em, id');
-    $sel->execute([':a' => $albumId . ':%']);
+    // Busca todas as fotos do álbum, excluindo o registro master
+    $sel = $pdo->prepare('SELECT * FROM telegram_album WHERE id LIKE :a AND id != :m ORDER BY mensagem_id ASC, id ASC');
+    $sel->execute([
+        ':a' => $albumId . ':%',
+        ':m' => 'master:' . $albumId,
+    ]);
     $fotos = $sel->fetchAll();
 
     $fotosBase = [];
@@ -774,7 +1018,12 @@ function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): v
         if (!$baixado['ok']) {
             continue;
         }
-        $fotosBase[] = ['papel' => $f['papel'] ?? '', 'data' => $baixado['data'], 'mimeType' => $baixado['mimeType']];
+        $fotosBase[] = [
+            'papel' => $f['papel'] ?: null,
+            'data' => $baixado['data'],
+            'mimeType' => $baixado['mimeType'],
+            'legenda' => '',
+        ];
     }
 
     if (!$fotosBase) {
@@ -782,22 +1031,21 @@ function processarAlbum(int $chatId, array $m, array $anexo, string $albumId): v
         return;
     }
 
-    aoLerFotos($chatId, $fotosBase);
-}
-
-function silencioDoAlbum(string $albumId): bool
-{
-    try {
-        $stmt = Banco::pdo()->prepare('SELECT MAX(atualizado_em) AS ultimo FROM telegram_album WHERE id LIKE :a');
-        $stmt->execute([':a' => $albumId . ':%']);
-        $row = $stmt->fetch();
-        if (!$row || !$row['ultimo']) {
-            return false;
+    // Se alguma foto do álbum não tiver papel definido, classifica o álbum via IA
+    $precisaClassificar = false;
+    foreach ($fotosBase as $fb) {
+        if (empty($fb['papel'])) {
+            $precisaClassificar = true;
+            break;
         }
-        return (time() - strtotime($row['ultimo'])) * 1000 >= ALBUM_SILENCIO_MS;
-    } catch (Exception $e) {
-        return true;
     }
+
+    if ($precisaClassificar) {
+        Telegram::acaoChat($chatId, 'typing');
+        $fotosBase = Ocr::classificarAlbum($fotosBase);
+    }
+
+    aoLerFotos($chatId, $fotosBase);
 }
 
 /** Arquivo único (foto ou imagem anexada como documento). */
@@ -822,18 +1070,41 @@ function processarUmArquivo(int $chatId, array $m, array $anexo, ?string $papel)
             $intro = !empty($classificado['rotulo'])
                 ? 'Parece ser ' . $classificado['rotulo'] . ', mas não tenho certeza.'
                 : 'Não consegui identificar essa foto sozinho.';
-            Conversa::definir($chatId, 'classificando_foto', ['file_id' => (string) $anexo['file_id']]);
-            Telegram::enviarTeclado($chatId, $intro . "\n\nO que ela mostra?", tecladoDePapeis());
+            // a pergunta ocupa o estado da conversa: leva junto a leitura de água em
+            // andamento, para ela voltar depois da resposta
+            $emAndamento = Conversa::ler($chatId);
+            Conversa::definir($chatId, 'classificando_foto', [
+                'file_id' => (string) $anexo['file_id'],
+                'retomar' => $emAndamento['estado'] === 'montando_agua' ? $emAndamento['payload'] : null,
+            ]);
+            Telegram::enviarTeclado($chatId, $intro . "\n\nO que ela mostra?", tecladoDePapeis(perfilDe($chatId) === 'loja2'));
             return;
         }
     }
 
-    aoLerFotos($chatId, [['papel' => $papel, 'data' => $baixado['data'], 'mimeType' => $baixado['mimeType']]]);
+    aoLerFotos($chatId, [[
+        'papel' => $papel,
+        'data' => $baixado['data'],
+        'mimeType' => $baixado['mimeType'],
+        // a legenda decide o imóvel ("av brasil"); antes ela nunca chegava até lá
+        'legenda' => (string) ($m['caption'] ?? ''),
+    ]]);
 }
 
-/** Opções oferecidas quando a classificação automática não decidiu. */
-function tecladoDePapeis(): array
+/**
+ * Opções oferecidas quando a classificação automática não decidiu.
+ *
+ * A Loja 02 só manda conta de energia e o próprio watímetro — mostrar CESAN e
+ * hidrômetro para ela só abriria caminho para um toque errado.
+ */
+function tecladoDePapeis(bool $soEnergia = false): array
 {
+    if ($soEnergia) {
+        return [[
+            ['text' => '⚡ Fatura EDP', 'callback_data' => 'f:fatura_energia'],
+            ['text' => '🔌 Meu watímetro', 'callback_data' => 'f:interno'],
+        ]];
+    }
     return [
         [
             ['text' => '📄 Fatura CESAN', 'callback_data' => 'f:fatura'],
@@ -904,22 +1175,34 @@ function aoLerFotos(int $chatId, array $fotos): void
             return;
         }
 
-        if ($local === 'av_brasil' || $perfil === 'loja2') {
-            Banco::salvarSegredo('ULTIMO_WATIMETRO_LOJA2', (string) $leituraWatimetro);
-            Pendencia::executarTuya([]);
-            $tuya = Banco::ultimoTuya();
-            $valTuya = $tuya ? fmt_num((float) $tuya['valor_extraido'], 2) : '---';
+        $recusa = Ocr::conferirRelogioNovo($local, $leituraWatimetro);
+        if ($recusa !== null) {
+            Telegram::enviarMensagem($chatId, $recusa);
+            return;
+        }
 
-            $s = "🔄 *Watímetros Sincronizados!*\n\n"
-                . "🔌 *Watímetro Loja (Fernando):* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n"
-                . "📊 *Watímetro Tuya (Graça):* `" . $valTuya . " kWh`\n\n"
-                . "Ambos os medidores foram sincronizados com sucesso!\n"
-                . "Assim que a conta da EDP da Av. Brasil for enviada, o cálculo do rateio será gerado automaticamente.";
+        if ($local === 'av_brasil') {
+            Banco::salvarLeituraFoto(Ocr::RELOGIO_POR_FOTO['av_brasil']['chave'], $leituraWatimetro);
+            // a Tuya mede a Casa 03; sincroniza junto para os dois relógios serem do mesmo dia
+            $sync = Pendencia::executarTuya([]);
+            $tuya = Banco::ultimoTuya();
+            $valTuya = $tuya ? fmt_num((float) $tuya['valor_extraido'], 2) . ' kWh' : '---';
+
+            $s = "🔌 *Watímetro Loja (Fernando) registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n";
+            if ($sync['ok']) {
+                $s .= "📊 *Watímetro Tuya (Graça) sincronizado:* `{$valTuya}`\n\n"
+                    . "Os dois relógios estão em dia. Assim que a conta da EDP da Av. Brasil for enviada, o rateio sai com eles.";
+            } else {
+                $s .= "📊 *Watímetro Tuya (Graça):* não sincronizou agora (último: `{$valTuya}`).\n\n"
+                    . "Sua leitura ficou guardada. O administrador pode rodar /sincronizar depois.";
+            }
             Telegram::enviarMensagem($chatId, $s);
             return;
         } else {
-            Banco::salvarSegredo('ULTIMO_WATIMETRO_CASA2', (string) $leituraWatimetro);
-            $s = "🔌 *Submedidor Casa 2 (Mirian) registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n\n"
+            Banco::salvarLeituraFoto(Ocr::RELOGIO_POR_FOTO['rua_inhambu']['chave'], $leituraWatimetro);
+            // nome vem do cadastro (perfil casa2): o morador da casa muda e o texto acompanha
+            $nomeCasa2 = Banco::nomesPorPerfil()['casa2'] ?? null;
+            $s = "🔌 *Submedidor Casa 2" . ($nomeCasa2 ? " ({$nomeCasa2})" : '') . " registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n\n"
                 . "Leitura registrada! Assim que a fatura da EDP for enviada, o rateio será calculado automaticamente.";
             Telegram::enviarMensagem($chatId, $s);
             return;
@@ -927,16 +1210,27 @@ function aoLerFotos(int $chatId, array $fotos): void
     }
 
     if ($temAgua) {
-        $r = Ocr::montarAgua($fotos);
+        $r = Ocr::lerAgua($fotos);
+        if (!$r['ok']) {
+            Telegram::enviarMensagem($chatId, $r['erro']);
+            return;
+        }
+        if (!$r['parcial']) {
+            Telegram::enviarMensagem($chatId, 'Não consegui ler nenhum número nessa foto. Tente uma foto mais nítida, de frente.');
+            return;
+        }
+        avancarAgua($chatId, $r['parcial'] + ['origem' => 'foto', 'avisos_ocr' => $r['avisos'] ?? []]);
+        return;
     } elseif ($temEnergia) {
-        $local = 'rua_inhambu';
+        // a Loja 02 só existe na Av. Brasil: a conta dela nunca vai para a Rua Inhambu
+        $local = $perfil === 'loja2' ? 'av_brasil' : 'rua_inhambu';
         foreach ($fotos as $f) {
             $leg = strtolower($f['legenda'] ?? '');
             if (strpos($leg, 'av') !== false || strpos($leg, 'brasil') !== false) {
                 $local = 'av_brasil';
             }
         }
-        $r = Ocr::montarEnergia($local, $fotos);
+        $r = Ocr::montarEnergia($local, $fotos, null, $perfil === 'loja2');
     } else {
         Telegram::enviarMensagem($chatId,
             "Não consegui identificar o que é essa foto.\n\n"
@@ -967,7 +1261,14 @@ function aoLerFotos(int $chatId, array $fotos): void
     if ($perfil === 'loja2') {
         // Fernando recebe de volta apenas o consumo e preço dele
         $rPreview = Pendencia::rateioDaPendencia($p);
-        Telegram::enviarMensagem($chatId, resp_rateio_fernando($rPreview, $nomes));
+        // o rateio calculado não carrega a data; sem ela o resumo saía "Resumo de Rateio - "
+        $msg = resp_rateio_fernando($rPreview + ['data' => $payload['data'] ?? null], $nomes);
+        if (empty($payload['interno2'])) {
+            $msg .= "\n\n⚠️ Sem uma foto nova do seu watímetro, o valor da loja saiu pela diferença do total. "
+                . "Mande a foto do display para o cálculo sair medido.";
+        }
+        $msg .= "\n\nO administrador ainda vai conferir antes de gravar.";
+        Telegram::enviarMensagem($chatId, $msg);
 
         // Notifica administradores para conferir e confirmar
         $admins = Banco::chatsPorPerfil('admin');
@@ -981,6 +1282,42 @@ function aoLerFotos(int $chatId, array $fotos): void
     }
 
     Telegram::enviarTeclado($chatId, Pendencia::texto($p, $nomes), Pendencia::teclado($id));
+}
+
+/**
+ * Soma o que chegou agora ao que já estava guardado e decide: pede o que falta
+ * ou, com tudo em mãos, monta a pendência de confirmação.
+ *
+ * A fatura da CESAN e os hidrômetros costumam chegar em envios separados — a
+ * fatura vem pelo correio, os hidrômetros ficam no muro. Antes o bot criava a
+ * pendência com o que tinha e os hidrômetros entravam zerados.
+ */
+function avancarAgua(int $chatId, array $novo): void
+{
+    $estado = Conversa::ler($chatId);
+    $guardado = $estado['estado'] === 'montando_agua' ? $estado['payload'] : [];
+    $p = Pendencia::aguaJuntar($guardado, $novo);
+
+    $falta = Pendencia::aguaFaltando($p);
+    if ($falta) {
+        Conversa::definir($chatId, 'montando_agua', $p);
+        Telegram::enviarMensagem($chatId, resp_agua_parcial($p, $falta));
+        return;
+    }
+    Conversa::limpar($chatId);
+
+    $payload = [
+        'data' => $p['data'] ?? fmt_hoje(),
+        'cesan' => (float) $p['cesan'],
+        'h1' => (float) $p['h1'],
+        'h2' => (float) $p['h2'],
+        'h3' => (float) $p['h3'],
+        'fatura' => (float) $p['fatura'],
+        'origem' => $p['origem'] ?? 'foto',
+        'avisos_ocr' => $p['avisos_ocr'] ?? [],
+    ];
+    $id = Pendencia::criar($chatId, 'agua', $payload);
+    Telegram::enviarTeclado($chatId, Pendencia::texto(Banco::pendencia($id), Banco::nomesPorPerfil()), Pendencia::teclado($id));
 }
 
 // ============================================================ botões
@@ -1098,6 +1435,7 @@ function aoClicarBotao(array $cb): void
         Telegram::enviarMensagem($chatId, $ok);
     }
 
+    $separadas = [];
     if ($p['tipo'] === 'agua') {
         $dadosRateio = [
             'data_leitura' => $d['data'],
@@ -1114,9 +1452,6 @@ function aoClicarBotao(array $cb): void
             'valor_fatura_total' => $r['valor_fatura_total'],
         ];
         $separadas = resp_mensagens_separadas_agua($dadosRateio, $nomes);
-        foreach ($separadas as $msgSeparada) {
-            Telegram::enviarMensagem($chatId, $msgSeparada);
-        }
     } elseif ($p['tipo'] === 'energia') {
         $local = $d['local'] ?? 'rua_inhambu';
         $row = Banco::ultimoRateioEnergia($local);
@@ -1129,27 +1464,29 @@ function aoClicarBotao(array $cb): void
                     $cid = (int) $cL2['chat_id'];
                     Telegram::enviarMensagem($cid, $msgFernando);
                 }
-                // Envia para o admin as mensagens separadas prontas para copiar
-                $separadas = resp_mensagens_separadas_energia($row, $nomes);
-                foreach ($separadas as $msgSeparada) {
-                    Telegram::enviarMensagem($chatId, $msgSeparada);
-                }
-            } else {
-                // Rua Inhambu: mensagens separadas para Mirian (Casa 2) e Casa 1
-                $separadas = resp_mensagens_separadas_energia($row, $nomes);
-                foreach ($separadas as $msgSeparada) {
-                    Telegram::enviarMensagem($chatId, $msgSeparada);
-                }
             }
+            $separadas = resp_mensagens_separadas_energia($row, $nomes);
         }
     }
 
-    // Notifica outros administradores cadastrados (ex: maria ou admin)
+    // Coleta todos os administradores cadastrados (ex: wellington, maria)
     $admins = Banco::chatsPorPerfil('admin');
-    foreach ($admins as $adm) {
-        $admChatId = (int) $adm['chat_id'];
+    $adminChatIds = array_unique(array_filter(array_map(fn($a) => (int) ($a['chat_id'] ?? 0), $admins)));
+    if (!in_array($chatId, $adminChatIds, true)) {
+        $adminChatIds[] = $chatId;
+    }
+
+    // Notifica os outros administradores com o resumo geral
+    foreach ($adminChatIds as $admChatId) {
         if ($admChatId !== $chatId) {
             Telegram::enviarMensagem($admChatId, "📢 *Leitura confirmada no condomínio:*\n\n" . $ok);
+        }
+    }
+
+    // Dispara para TODOS os administradores as mensagens individuais prontas para copiar
+    foreach ($adminChatIds as $admChatId) {
+        foreach ($separadas as $msgSeparada) {
+            Telegram::enviarMensagem($admChatId, $msgSeparada);
         }
     }
 }
@@ -1171,6 +1508,9 @@ function aoFoto(int $chatId, array $partes): void
         return;
     }
     Conversa::limpar($chatId);
+    if (!empty($estado['payload']['retomar'])) {
+        Conversa::definir($chatId, 'montando_agua', $estado['payload']['retomar']);
+    }
 
     Telegram::acaoChat($chatId, 'typing');
     $baixado = Telegram::baixarArquivo($fileId);
