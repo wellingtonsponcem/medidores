@@ -31,6 +31,59 @@ class Pendencia
         return $id;
     }
 
+    /** O que a leitura de água precisa ter para virar pendência. */
+    public const AGUA_OBRIGATORIOS = ['cesan', 'fatura', 'h1', 'h2', 'h3'];
+
+    /**
+     * Junta uma leitura de água montada aos poucos: fatura num envio,
+     * hidrômetros noutro, um número digitado no fim. O valor novo vence o
+     * guardado (é a correção de quem reenviou), e os avisos se acumulam.
+     */
+    public static function aguaJuntar(array $guardado, array $novo): array
+    {
+        $avisos = array_merge($guardado['avisos_ocr'] ?? [], $novo['avisos_ocr'] ?? []);
+        $p = array_merge($guardado, array_filter($novo, fn($v) => $v !== null && $v !== ''));
+        $p['avisos_ocr'] = array_values(array_unique($avisos));
+        return $p;
+    }
+
+    /** @return string[] rótulos do que ainda falta, na ordem em que o usuário vê */
+    public static function aguaFaltando(array $p): array
+    {
+        $falta = [];
+        if ((float) ($p['cesan'] ?? 0) <= 0 || (float) ($p['fatura'] ?? 0) <= 0) {
+            $falta[] = 'fatura da CESAN';
+        }
+        foreach (['h1', 'h2', 'h3'] as $h) {
+            if ((float) ($p[$h] ?? 0) <= 0) {
+                $falta[] = strtoupper($h);
+            }
+        }
+        return $falta;
+    }
+
+    /** Lê "h1 512 h2 300", "cesan 1861", "fatura 407,06" digitados durante a montagem. */
+    public static function aguaDoTexto(string $texto): array
+    {
+        $t = strtolower($texto);
+        $p = [];
+        if (preg_match_all('/\bh\s*([123])\s*[:=-]?\s*(\d+(?:[.,]\d+)?)/', $t, $m, PREG_SET_ORDER)) {
+            foreach ($m as $x) {
+                $p['h' . $x[1]] = (float) sanitizar_hidro($x[2], null);
+            }
+        }
+        if (preg_match('/\bcesan\s*[:=-]?\s*(\d+)/', $t, $x)) {
+            $p['cesan'] = (float) $x[1];
+        }
+        if (preg_match('/\b(?:fatura|valor|total)\s*[:=-]?\s*(?:r\$\s*)?(\d[\d.,]*)/', $t, $x)) {
+            $v = sanitizar_numero($x[1]);
+            if ($v !== null) {
+                $p['fatura'] = $v;
+            }
+        }
+        return array_filter($p, fn($v) => $v > 0);
+    }
+
     public static function teclado(string $id): array
     {
         return [[

@@ -175,6 +175,42 @@ function resp_compartilhar(?array $agua, ?array $energia, array $nomes): string
     return $texto;
 }
 
+/**
+ * Leitura de água incompleta: diz o que já chegou e pede só o que falta.
+ *
+ * @param string[] $falta rótulos de Pendencia::aguaFaltando()
+ */
+function resp_agua_parcial(array $p, array $falta): string
+{
+    $recebido = [];
+    if (!empty($p['cesan'])) {
+        $recebido[] = 'CESAN ' . fmt_num($p['cesan'], 0);
+    }
+    if (!empty($p['fatura'])) {
+        $recebido[] = 'fatura ' . fmt_moeda($p['fatura']);
+    }
+    foreach (['h1', 'h2', 'h3'] as $h) {
+        if (!empty($p[$h])) {
+            $recebido[] = strtoupper($h) . ' ' . fmt_num($p[$h], 0);
+        }
+    }
+    $lista = count($falta) > 1
+        ? implode(', ', array_slice($falta, 0, -1)) . ' e ' . end($falta)
+        : $falta[0];
+
+    $s = "💧 *Leitura de água em andamento*\n\n";
+    if ($recebido) {
+        $s .= 'Já tenho: ' . implode(' · ', $recebido) . "\n\n";
+    }
+    $s .= "Para calcular o rateio ainda falta: *{$lista}*.\n\n";
+    $soHidro = !in_array('fatura da CESAN', $falta, true);
+    $s .= $soHidro
+        ? "Mande as fotos dos hidrômetros (pode ser tudo num álbum) ou digite, por exemplo: `h1 512 h2 300 h3 200`."
+        : "Mande a foto da fatura da CESAN ou digite, por exemplo: `cesan 1861 fatura 407,06`.";
+    $s .= "\n\n_Guardo o que já li por 24 horas. Para desistir, digite_ `cancelar`.";
+    return $s;
+}
+
 function resp_nao_autorizado(): string
 {
     return "Olá! Este bot é do *D-Meter*, mas seu aparelho ainda não está liberado.\n\n"

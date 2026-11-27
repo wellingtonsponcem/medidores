@@ -498,60 +498,61 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
     }
 
     /**
-     * Monta a leitura de água pronta para virar pendência.
+     * Lê o que der da água nas fotos: fatura, hidrômetros, ou os dois.
      *
-     * @return array{ok:bool, payload?:array, avisos?:array, erro?:string}
+     * Devolve só o que foi lido com valor — nada de zero no lugar do que faltou.
+     * Antes, uma foto só da fatura virava pendência com H1, H2 e H3 em 0 e o
+     * rateio jogava a conta inteira em "Serviço/Comum". Quem junta as partes
+     * (inclusive de envios diferentes) é o handler, com Pendencia::aguaJuntar().
+     *
+     * @return array{ok:bool, parcial?:array, avisos?:array, erro?:string}
      */
-    public static function montarAgua(array $fotos, ?string $data = null): array
+    public static function lerAgua(array $fotos): array
     {
         $r = self::ler('agua', $fotos);
         if (!$r['ok']) {
             return ['ok' => false, 'erro' => $r['erro']];
         }
-        $v = $r['valores'];
-        $corrigido = self::corrigirAgua($v);
+        $corrigido = self::corrigirAgua($r['valores']);
         $v = $corrigido['valores'];
+        $parcial = [];
 
         $fatura = $v['fatura'] ?? [];
-        $data = fmt_data_iso($fatura['data_leitura'] ?? null) ?? ($data ?: fmt_hoje());
-
-        $payload = [
-            'data' => $data,
-            'cesan' => (float) ($fatura['leitura_atual'] ?? $fatura['leitura_fatura'] ?? 0),
-            'h1' => 0,
-            'h2' => 0,
-            'h3' => 0,
-            'fatura' => (float) ($fatura['valor_total'] ?? 0),
-            'origem' => 'foto',
-            'avisos_ocr' => $corrigido['avisos'],
-        ];
-
-        $faltando = [];
-        foreach ($v['medidores_individuais'] ?? [] as $med) {
-            $id = strtolower((string) ($med['identificador'] ?? ''));
-            if (!in_array($id, ['h1', 'h2', 'h3'], true)) {
-                continue;
+        $cesan = (float) ($fatura['leitura_atual'] ?? $fatura['leitura_fatura'] ?? 0);
+        if ($cesan > 0) {
+            $parcial['cesan'] = $cesan;
+            $data = fmt_data_iso($fatura['data_leitura'] ?? null);
+            if ($data) {
+                $parcial['data'] = $data;
             }
-            $valor = sanitizar_hidro($med['leitura_processada'] ?? '', null);
-            if ($valor === '' || (float) $valor <= 0) {
-                $faltando[] = strtoupper($id);
-                continue;
+        }
+        $valor = (float) ($fatura['valor_total'] ?? 0);
+        if ($valor > 0) {
+            $parcial['fatura'] = $valor;
+        }
+
+        // hidrômetro só vale se veio foto de hidrômetro: com a fatura sozinha o
+        // modelo às vezes "lê" um número que não está em foto nenhuma
+        $temHidrometro = false;
+        foreach ($fotos as $f) {
+            if (in_array($f['papel'] ?? '', ['h1', 'h2', 'h3', 'hidrometro'], true)) {
+                $temHidrometro = true;
             }
-            $payload[$id] = (float) $valor;
+        }
+        if ($temHidrometro) {
+            foreach ($v['medidores_individuais'] ?? [] as $med) {
+                $id = strtolower((string) ($med['identificador'] ?? ''));
+                if (!in_array($id, ['h1', 'h2', 'h3'], true)) {
+                    continue;
+                }
+                $lido = sanitizar_hidro($med['leitura_processada'] ?? '', null);
+                if ($lido !== '' && (float) $lido > 0) {
+                    $parcial[$id] = (float) $lido;
+                }
+            }
         }
 
-        if ($payload['cesan'] <= 0) {
-            return ['ok' => false, 'erro' => 'Não consegui ler a leitura da CESAN na fatura. Foto mais nítida, por favor.'];
-        }
-        foreach ($faltando as $f) {
-            $payload[strtolower($f)] = null;
-        }
-        if ($faltando) {
-            $payload['avisos_ocr'][] = 'Não consegui ler o hidrômetro ' . implode(' e ', $faltando)
-                . '. Confira na mensagem e ajuste digitando o número, ou reenvie a foto.';
-        }
-
-        return ['ok' => true, 'payload' => $payload, 'avisos' => $corrigido['avisos']];
+        return ['ok' => true, 'parcial' => $parcial, 'avisos' => $corrigido['avisos']];
     }
 
     /**

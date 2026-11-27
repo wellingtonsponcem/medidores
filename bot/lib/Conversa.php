@@ -13,6 +13,12 @@ class Conversa
 {
     public const VIDA_SEGUNDOS = 900; // 15 min: mais que isso, o usuário já esqueceu o que estava fazendo
 
+    /**
+     * Estados que esperam o mundo real, não uma resposta rápida: entre fotografar
+     * a fatura e descer até os hidrômetros pode passar o dia.
+     */
+    public const VIDA_POR_ESTADO = ['montando_agua' => 86400];
+
     /** @return array{estado:?string, payload:array} */
     public static function ler(int $chatId): array
     {
@@ -25,7 +31,7 @@ class Conversa
         }
         // estado velho não vale mais: o bot não pode ficar esperando para sempre
         $idade = time() - strtotime($row['atualizado_em']);
-        if ($idade > self::VIDA_SEGUNDOS) {
+        if ($idade > (self::VIDA_POR_ESTADO[$row['estado']] ?? self::VIDA_SEGUNDOS)) {
             self::limpar($chatId);
             return ['estado' => null, 'payload' => []];
         }

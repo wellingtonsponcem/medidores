@@ -639,6 +639,19 @@ function aoTexto(int $chatId, array $m, string $texto): void
         cmdEnergia($chatId, energia_local_normalizado($texto));
         return;
     }
+    if ($estado['estado'] === 'montando_agua' && ehAdmin($chatId)) {
+        if (in_array($textoNorm, ['cancelar', 'cancela', 'desistir'], true)) {
+            Conversa::limpar($chatId);
+            Telegram::enviarMensagem($chatId, 'Leitura de água descartada. Nada foi gravado.');
+            return;
+        }
+        // número digitado completa a leitura; qualquer outra coisa segue o fluxo normal
+        $digitado = Pendencia::aguaDoTexto($texto);
+        if ($digitado) {
+            avancarAgua($chatId, $digitado);
+            return;
+        }
+    }
 
     $intencao = Interpretacao::analisar($texto, $perfil);
 
@@ -991,7 +1004,13 @@ function processarUmArquivo(int $chatId, array $m, array $anexo, ?string $papel)
             $intro = !empty($classificado['rotulo'])
                 ? 'Parece ser ' . $classificado['rotulo'] . ', mas não tenho certeza.'
                 : 'Não consegui identificar essa foto sozinho.';
-            Conversa::definir($chatId, 'classificando_foto', ['file_id' => (string) $anexo['file_id']]);
+            // a pergunta ocupa o estado da conversa: leva junto a leitura de água em
+            // andamento, para ela voltar depois da resposta
+            $emAndamento = Conversa::ler($chatId);
+            Conversa::definir($chatId, 'classificando_foto', [
+                'file_id' => (string) $anexo['file_id'],
+                'retomar' => $emAndamento['estado'] === 'montando_agua' ? $emAndamento['payload'] : null,
+            ]);
             Telegram::enviarTeclado($chatId, $intro . "\n\nO que ela mostra?", tecladoDePapeis(perfilDe($chatId) === 'loja2'));
             return;
         }
@@ -1125,7 +1144,17 @@ function aoLerFotos(int $chatId, array $fotos): void
     }
 
     if ($temAgua) {
-        $r = Ocr::montarAgua($fotos);
+        $r = Ocr::lerAgua($fotos);
+        if (!$r['ok']) {
+            Telegram::enviarMensagem($chatId, $r['erro']);
+            return;
+        }
+        if (!$r['parcial']) {
+            Telegram::enviarMensagem($chatId, 'Não consegui ler nenhum número nessa foto. Tente uma foto mais nítida, de frente.');
+            return;
+        }
+        avancarAgua($chatId, $r['parcial'] + ['origem' => 'foto', 'avisos_ocr' => $r['avisos'] ?? []]);
+        return;
     } elseif ($temEnergia) {
         // a Loja 02 só existe na Av. Brasil: a conta dela nunca vai para a Rua Inhambu
         $local = $perfil === 'loja2' ? 'av_brasil' : 'rua_inhambu';
@@ -1187,6 +1216,42 @@ function aoLerFotos(int $chatId, array $fotos): void
     }
 
     Telegram::enviarTeclado($chatId, Pendencia::texto($p, $nomes), Pendencia::teclado($id));
+}
+
+/**
+ * Soma o que chegou agora ao que já estava guardado e decide: pede o que falta
+ * ou, com tudo em mãos, monta a pendência de confirmação.
+ *
+ * A fatura da CESAN e os hidrômetros costumam chegar em envios separados — a
+ * fatura vem pelo correio, os hidrômetros ficam no muro. Antes o bot criava a
+ * pendência com o que tinha e os hidrômetros entravam zerados.
+ */
+function avancarAgua(int $chatId, array $novo): void
+{
+    $estado = Conversa::ler($chatId);
+    $guardado = $estado['estado'] === 'montando_agua' ? $estado['payload'] : [];
+    $p = Pendencia::aguaJuntar($guardado, $novo);
+
+    $falta = Pendencia::aguaFaltando($p);
+    if ($falta) {
+        Conversa::definir($chatId, 'montando_agua', $p);
+        Telegram::enviarMensagem($chatId, resp_agua_parcial($p, $falta));
+        return;
+    }
+    Conversa::limpar($chatId);
+
+    $payload = [
+        'data' => $p['data'] ?? fmt_hoje(),
+        'cesan' => (float) $p['cesan'],
+        'h1' => (float) $p['h1'],
+        'h2' => (float) $p['h2'],
+        'h3' => (float) $p['h3'],
+        'fatura' => (float) $p['fatura'],
+        'origem' => $p['origem'] ?? 'foto',
+        'avisos_ocr' => $p['avisos_ocr'] ?? [],
+    ];
+    $id = Pendencia::criar($chatId, 'agua', $payload);
+    Telegram::enviarTeclado($chatId, Pendencia::texto(Banco::pendencia($id), Banco::nomesPorPerfil()), Pendencia::teclado($id));
 }
 
 // ============================================================ botões
@@ -1377,6 +1442,9 @@ function aoFoto(int $chatId, array $partes): void
         return;
     }
     Conversa::limpar($chatId);
+    if (!empty($estado['payload']['retomar'])) {
+        Conversa::definir($chatId, 'montando_agua', $estado['payload']['retomar']);
+    }
 
     Telegram::acaoChat($chatId, 'typing');
     $baixado = Telegram::baixarArquivo($fileId);
