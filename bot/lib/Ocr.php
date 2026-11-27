@@ -626,12 +626,12 @@ Retorne os dados estritamente em formato JSON para integração de sistema:
             }
         } elseif ($local === 'rua_inhambu') {
             if ($payload['interno'] <= 0) {
-                $watMirian = self::relogioParaRateio('rua_inhambu', 'Casa 2');
-                if ($watMirian['valor'] !== null) {
-                    $payload['interno'] = $watMirian['valor'];
+                $watCasa2 = self::relogioParaRateio('rua_inhambu', 'Casa 2');
+                if ($watCasa2['valor'] !== null) {
+                    $payload['interno'] = $watCasa2['valor'];
                 }
-                if ($watMirian['aviso']) {
-                    $payload['avisos_ocr'][] = $watMirian['aviso'];
+                if ($watCasa2['aviso']) {
+                    $payload['avisos_ocr'][] = $watCasa2['aviso'];
                 }
             }
         }

@@ -337,9 +337,9 @@ function resp_mensagens_separadas_energia(array $row, array $nomes): array
         $msgs[] = resp_rateio_fernando($row, $nomes);
     } else {
         $c1 = $nomes['casa1'] ?? 'Casa 1';
-        $c2 = $nomes['casa2'] ?? 'Mirian';
+        $c2 = $nomes['casa2'] ?? 'Casa 2';
 
-        // Mensagem Mirian (Casa 2 - Submedidor Nansen)
+        // Mensagem da Casa 2 (Submedidor Nansen) — o nome vem do cadastro
         $msgs[] = "Olá, *{$c2}*! Segue a sua conta de energia referente ao mês de *{$ref}*:\n\n"
             . "⚡ *Detalhamento da Energia — Novo Horizonte*\n"
             . "• Consumo Total da Fatura (EDP): " . fmt_num($total, 2) . " kWh\n"

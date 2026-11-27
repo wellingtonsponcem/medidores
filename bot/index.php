@@ -1115,7 +1115,9 @@ function aoLerFotos(int $chatId, array $fotos): void
             return;
         } else {
             Banco::salvarLeituraFoto(Ocr::RELOGIO_POR_FOTO['rua_inhambu']['chave'], $leituraWatimetro);
-            $s = "🔌 *Submedidor Casa 2 (Mirian) registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n\n"
+            // nome vem do cadastro (perfil casa2): o morador da casa muda e o texto acompanha
+            $nomeCasa2 = Banco::nomesPorPerfil()['casa2'] ?? null;
+            $s = "🔌 *Submedidor Casa 2" . ($nomeCasa2 ? " ({$nomeCasa2})" : '') . " registrado:* `" . fmt_num($leituraWatimetro, 2) . " kWh`\n\n"
                 . "Leitura registrada! Assim que a fatura da EDP for enviada, o rateio será calculado automaticamente.";
             Telegram::enviarMensagem($chatId, $s);
             return;

@@ -238,7 +238,7 @@ class Interpretacao
             . "Perfis possíveis: admin (gerencia tudo), casa1, casa2, casa3, loja2.\n"
             . "Locais de energia:\n"
             . "- 'av_brasil': Avenida Brasil, Praia de Carapebus, Loja 02, Fernando, Graça\n"
-            . "- 'rua_inhambu': Rua Inhambu, Novo Horizonte, Casa 1, Casa 2, Mirian, Rose, Wellington\n\n"
+            . "- 'rua_inhambu': Rua Inhambu, Novo Horizonte, Casa 1, Casa 2, Rose, Wellington\n\n"
             . "Perfil de quem falou: " . ($perfil ?: 'desconhecido') . "\n\n"
             . "Responda APENAS com o JSON, sem markdown, sem comentário.\n"
             . "Se for consulta de energia, informe em 'local' o imóvel ('av_brasil' ou 'rua_inhambu') caso mencionado.\n"
