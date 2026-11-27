@@ -141,7 +141,8 @@ function despachar(array $update): void
     }
 
     $textoBruto = trim((string) ($m['text'] ?? ''));
-    if ($textoBruto !== '' && preg_match('/^\/?(vincular|login)\b/i', $textoBruto)) {
+    // vincular e convite entram antes da allowlist: são justamente a porta de entrada
+    if ($textoBruto !== '' && preg_match('/^\/?(vincular|login)\b|^\/start\s+\S/i', $textoBruto)) {
         aoComando($chatId, $m, $textoBruto);
         return;
     }
@@ -242,6 +243,13 @@ function aoComando(int $chatId, array $m, string $texto): void
 
     switch ($comando) {
         case 'start':
+            if (isset($args[0]) && $args[0] !== '') {
+                cmdEntrarPorConvite($chatId, $m, $args[0]);
+                return;
+            }
+            Telegram::enviarMensagem($chatId, resp_ajuda(ehAdmin($chatId)));
+            return;
+
         case 'ajuda':
         case 'help':
         case 'comandos':
@@ -309,6 +317,11 @@ function aoComando(int $chatId, array $m, string $texto): void
             cmdLogo($chatId);
             return;
 
+        case 'convite':
+        case 'convidar':
+            cmdConvite($chatId, $args);
+            return;
+
         default:
             Telegram::enviarMensagem($chatId, "Não conheço o comando `/{$comando}`.\n\n" . resp_ajuda(ehAdmin($chatId)));
     }
@@ -345,6 +358,59 @@ function cmdVincular(int $chatId, array $m, array $args): void
         ? "Você é administrador: pode consultar tudo e lançar leitura por foto ou por texto.\n\n" . resp_ajuda(true)
         : "Você consulta o consumo da sua unidade.\n\n" . resp_ajuda(false);
     Telegram::enviarMensagem($chatId, $s);
+}
+
+/** Admin: gera o link de uso único que vincula o aparelho de um morador sem senha. */
+function cmdConvite(int $chatId, array $args): void
+{
+    if (!ehAdmin($chatId)) {
+        Telegram::enviarMensagem($chatId, 'Só o administrador gera convites.');
+        return;
+    }
+    if (!isset($args[0])) {
+        Telegram::enviarMensagem($chatId, "Use `/convite usuário` — por exemplo `/convite wellington`.\n\n"
+            . 'O bot devolve um link que vale uma vez, por ' . Convite::HORAS . ' horas. Quem tocar nele entra com o acesso daquele usuário, sem senha.');
+        return;
+    }
+    $r = Convite::criar($args[0], $chatId);
+    if (!$r['ok']) {
+        Telegram::enviarMensagem($chatId, $r['erro']);
+        return;
+    }
+    $bot = Telegram::chamar('getMe')['resultado']['username'] ?? null;
+    $link = $bot ? "https://t.me/{$bot}?start={$r['codigo']}" : null;
+    $quem = ucfirst((string) $r['usuario']['nome']);
+
+    Telegram::enviarMensagem($chatId, "🔗 *Convite para {$quem}* ({$r['usuario']['perfil']})\n\n"
+        . 'Encaminhe a próxima mensagem para ele. O link vale *uma vez*, até '
+        . fmt_data_br($r['expira_em']) . ' ' . substr($r['expira_em'], 11, 5) . '.');
+    // só o convite, em texto puro, para encaminhar sem formatação quebrada
+    Telegram::enviarMensagem($chatId, $link
+        ? "Oi, {$quem}! Toque no link para entrar no bot do D-Meter e receber o seu consumo:\n{$link}"
+        : "Oi, {$quem}! Abra o bot do D-Meter no Telegram e envie:\n/start {$r['codigo']}", null, null);
+}
+
+/** Quem tocou no link do convite: vincula o aparelho e dá as boas-vindas. */
+function cmdEntrarPorConvite(int $chatId, array $m, string $codigo): void
+{
+    $userId = isset($m['from']['id']) ? (int) $m['from']['id'] : null;
+    $nomeChat = (string) ($m['from']['first_name'] ?? '');
+    try {
+        $r = Convite::usar($codigo, $chatId, $userId, $nomeChat);
+    } catch (Exception $e) {
+        Telegram::enviarMensagem($chatId, 'Não consegui conferir o convite agora. Toque no link de novo em instantes.');
+        return;
+    }
+    if (!$r['ok']) {
+        Telegram::enviarMensagem($chatId, $r['erro']);
+        return;
+    }
+    $quem = ucfirst((string) $r['usuario']['nome']);
+    Telegram::enviarMensagem($chatId, "👋 Oi, *{$quem}*! Seu aparelho está vinculado ({$r['usuario']['perfil']}).\n\n"
+        . "Por aqui você consulta o consumo de água e energia da sua unidade.\n\n" . resp_ajuda(false));
+    if (!empty($r['criado_por'])) {
+        Telegram::enviarMensagem($r['criado_por'], "✅ *{$quem}* entrou no bot pelo convite.");
+    }
 }
 
 function cmdResumo(int $chatId): void

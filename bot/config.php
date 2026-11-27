@@ -34,6 +34,7 @@ require_once __DIR__ . '/lib/Ocr.php';
 require_once __DIR__ . '/lib/Respostas.php';
 require_once __DIR__ . '/lib/Interpretacao.php';
 require_once __DIR__ . '/lib/Acesso.php';
+require_once __DIR__ . '/lib/Convite.php';
 require_once BOT_RAIZ . '/db_config.php';
 
 /**

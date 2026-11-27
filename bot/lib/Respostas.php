@@ -36,7 +36,8 @@ function resp_ajuda(bool $ehAdmin): string
             . "⌨️ Ou digite, por exemplo: `agua cesan 1806 h1 490 h2 189 h3 284 fatura 560.18`\n"
             . "/tuya — sincroniza o whatímetro da Av. Brasil\n"
             . "/usuarios — lista os acessos dos moradores\n"
-            . "/senha — redefine a senha de um usuário (`/senha maria 123456`)\n";
+            . "/senha — redefine a senha de um usuário (`/senha maria 123456`)\n"
+            . "/convite — link de uso único para um morador entrar sem senha (`/convite wellington`)\n";
     } else {
         $s .= "\n_Você consulta seu consumo. Lançamento é feito pelo administrador._";
     }

@@ -29,6 +29,7 @@ class PdoFalso
             'pendencias' => [],
             'telegram_aguardando' => [],
             'telegram_album' => [],
+            'telegram_convites' => [],
             'consumo_agua' => [],
             'consumo_energia' => [],
             'usuarios' => [],
@@ -391,6 +392,38 @@ class PdoFalsoStatement
             }
             usort($linhas, fn($a, $b) => strcmp((string) ($b['data_leitura'] ?? ''), (string) ($a['data_leitura'] ?? '')));
             $this->linhas = array_slice($linhas, 0, 1);
+            return true;
+        }
+
+        if (stripos($this->sql, 'INSERT INTO telegram_convites ') === 0) {
+            $h = $params[':h'];
+            if (isset($this->pdo->tabelas['telegram_convites'][$h])) {
+                throw new RuntimeException('chave duplicada em telegram_convites');
+            }
+            $this->pdo->tabelas['telegram_convites'][$h] = [
+                'codigo_hash' => $h, 'usuario_id' => $params[':u'], 'usuario_nome' => $params[':n'],
+                'perfil' => $params[':p'], 'criado_por' => $params[':c'], 'criado_em' => $params[':agora'],
+                'expira_em' => $params[':expira'], 'usado_em' => null, 'usado_por' => null,
+            ];
+            $this->afetadas = 1;
+            return true;
+        }
+        if ($this->sql === 'UPDATE telegram_convites SET usado_em = :agora, usado_por = :c WHERE codigo_hash = :h AND usado_em IS NULL AND expira_em > :agora') {
+            $c = &$this->pdo->tabelas['telegram_convites'][$params[':h']];
+            if ($c !== null && $c['usado_em'] === null && $c['expira_em'] > $params[':agora']) {
+                $c['usado_em'] = $params[':agora'];
+                $c['usado_por'] = $params[':c'];
+                $this->afetadas = 1;
+            }
+            if ($c === null) {
+                unset($this->pdo->tabelas['telegram_convites'][$params[':h']]);
+            }
+            unset($c);
+            return true;
+        }
+        if ($this->sql === 'SELECT * FROM telegram_convites WHERE codigo_hash = :h LIMIT 1') {
+            $c = $this->pdo->tabelas['telegram_convites'][$params[':h']] ?? null;
+            $this->linhas = $c ? [$c] : [];
             return true;
         }
 

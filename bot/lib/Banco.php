@@ -95,6 +95,18 @@ class Banco
                 status VARCHAR(20) NOT NULL DEFAULT "recebendo",
                 atualizado_em DATETIME NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+            // convite de uso único para vincular aparelho sem senha (só o hash do código)
+            'CREATE TABLE IF NOT EXISTS telegram_convites (
+                codigo_hash CHAR(64) PRIMARY KEY,
+                usuario_id VARCHAR(50) NOT NULL,
+                usuario_nome VARCHAR(120) NOT NULL,
+                perfil VARCHAR(20) NOT NULL,
+                criado_por BIGINT NOT NULL,
+                criado_em DATETIME NOT NULL,
+                expira_em DATETIME NOT NULL,
+                usado_em DATETIME NULL,
+                usado_por BIGINT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
         ];
         foreach ($ddl as $sql) {
             $pdo->exec($sql);
